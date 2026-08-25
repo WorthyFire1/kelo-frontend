@@ -536,7 +536,7 @@ textarea { resize: vertical; }
 .account-admin-card small { color: #cce2d2; }
 .account-admin-card .button { flex: 0 0 auto; border-color: rgba(255,255,255,.25); background: white; color: var(--green-900); box-shadow: none; }
 
-+.admin-shell { --admin-sidebar: 276px; min-height: 100vh; display: grid; grid-template-columns: var(--admin-sidebar) minmax(0, 1fr); background: #f3f6f3; }
+.admin-shell { --admin-sidebar: 276px; min-height: 100vh; display: grid; grid-template-columns: var(--admin-sidebar) minmax(0, 1fr); background: #f3f6f3; }
 .admin-sidebar { position: sticky; top: 0; z-index: 71; height: 100vh; display: flex; flex-direction: column; padding: 30px 20px 22px; color: #e7f1e9; background: #102f20; overflow-y: auto; }
 .admin-sidebar__brand { display: flex; flex-direction: column; padding: 2px 14px 30px; border-bottom: 1px solid rgba(255,255,255,.1); }
 .admin-sidebar__brand span { font-family: Georgia, "Times New Roman", serif; font-size: 2rem; line-height: 1; font-weight: 800; letter-spacing: .13em; color: white; }
