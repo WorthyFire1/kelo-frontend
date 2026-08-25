@@ -10,6 +10,7 @@ export interface AuthUser {
   lastName: string;
   name: string;
   email: string;
+  phone?: string;
   roles: string[];
   isAdmin: boolean;
 }
@@ -18,6 +19,7 @@ interface AuthState {
   user: AuthUser | null;
   token: string | null;
   setSession: (response: AuthResponse) => void;
+  updateUser: (profile: Pick<AuthUser, 'firstName' | 'lastName' | 'email' | 'phone'>) => void;
   logout: () => void;
 }
 
@@ -39,11 +41,18 @@ export const useAuthStore = create<AuthState>()(
             lastName: response.lastName ?? '',
             name,
             email: response.email,
+            phone: '',
             roles,
             isAdmin: roles.some((role) => role.toLocaleLowerCase() === 'admin'),
           },
         });
       },
+      updateUser: (profile) => set((state) => {
+        if (!state.user) return state;
+
+        const name = `${profile.firstName} ${profile.lastName}`.trim() || profile.email;
+        return { user: { ...state.user, ...profile, name } };
+      }),
       logout: () => {
         authTokenStorage.remove();
         set({ user: null, token: null });

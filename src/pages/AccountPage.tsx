@@ -1,25 +1,34 @@
 import { useState, type FormEvent } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { LogOut, Package, Percent, ShieldCheck, UserRound } from 'lucide-react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Breadcrumbs } from '@/components/ui/Breadcrumbs';
 import { Button } from '@/components/ui/Button';
 import { Container } from '@/components/ui/Container';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { ApiError } from '@/api/client';
 import { authService } from '@/services/authService';
+import { userService } from '@/services/userService';
 import { useAuthStore } from '@/store/useAuthStore';
-import { getJwtRoles } from '@/lib/jwt';
 
 export function AccountPage() {
   useDocumentTitle('Личный кабинет');
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const user = useAuthStore((state) => state.user);
   const setSession = useAuthStore((state) => state.setSession);
+  const updateUser = useAuthStore((state) => state.updateUser);
   const logout = useAuthStore((state) => state.logout);
   const [tab, setTab] = useState<'login' | 'register'>('login');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [profileMessage, setProfileMessage] = useState('');
+  const [profileError, setProfileError] = useState('');
+  const [isProfileSaving, setIsProfileSaving] = useState(false);
+  const profileQuery = useQuery({
+    queryKey: ['user', 'profile'],
+    queryFn: userService.getProfile,
+    enabled: Boolean(user),
+  });
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -49,10 +58,7 @@ export function AccountPage() {
       }
 
       setSession(response);
-      const isAdmin = getJwtRoles(response.accessToken)
-        .some((role) => role.toLocaleLowerCase() === 'admin');
-      const returnTo = searchParams.get('returnTo');
-      if (isAdmin) navigate(returnTo?.startsWith('/admin') ? returnTo : '/admin');
+      navigate('/account', { replace: true });
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 401) {
         setError('Неверный e-mail или пароль.');
@@ -66,6 +72,34 @@ export function AccountPage() {
     }
   };
 
+  const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const profile = {
+      firstName: String(data.get('firstName') ?? '').trim(),
+      lastName: String(data.get('lastName') ?? '').trim(),
+      email: String(data.get('profileEmail') ?? '').trim(),
+      phone: String(data.get('phone') ?? '').trim(),
+    };
+
+    setProfileMessage('');
+    setProfileError('');
+    setIsProfileSaving(true);
+
+    try {
+      const response = await userService.updateProfile(profile);
+      updateUser(profile);
+      setProfileMessage(response.message || 'Изменения сохранены.');
+    } catch (requestError) {
+      setProfileError(requestError instanceof ApiError ? requestError.message : 'Не удалось сохранить изменения. Попробуйте ещё раз.');
+    } finally {
+      setIsProfileSaving(false);
+    }
+  };
+
+  const roleLabel = user?.isAdmin ? 'Администратор' : 'Пользователь';
+  const profile = profileQuery.data;
+
   return (
     <Container className="page-shell">
       <Breadcrumbs items={[{ label: 'Личный кабинет' }]} />
@@ -75,7 +109,8 @@ export function AccountPage() {
           <aside className="account-sidebar">
             <div className="account-avatar"><UserRound /></div>
             <strong>{user.name}</strong>
-            <span>{user.email}</span>
+            <span className="account-email">{user.email}</span>
+            <span className="account-role">{roleLabel}</span>
             <button type="button" onClick={logout}><LogOut size={17} /> Выйти</button>
           </aside>
           <div className="account-content">
@@ -90,11 +125,18 @@ export function AccountPage() {
                 <Link className="button button--primary" to="/admin">Открыть админ-панель</Link>
               </section>
             )}
-            <section className="profile-form-section">
+            <form className="profile-form-section" key={profile ? `${profile.firstName}-${profile.lastName}-${profile.email}-${profile.phone}` : 'session-profile'} onSubmit={saveProfile}>
               <h2>Контактные данные</h2>
-              <div className="form-grid"><label><span>Имя</span><input defaultValue={user.name} /></label><label><span>E-mail</span><input defaultValue={user.email} /></label><label><span>Телефон</span><input placeholder="+7 900 000-00-00" /></label><label><span>Город</span><input placeholder="Ваш город" /></label></div>
-              <Button type="button">Сохранить изменения</Button>
-            </section>
+              <div className="form-grid">
+                <label><span>Имя</span><input name="firstName" required defaultValue={profile?.firstName ?? user.firstName} /></label>
+                <label><span>Фамилия</span><input name="lastName" required defaultValue={profile?.lastName ?? user.lastName} /></label>
+                <label><span>E-mail</span><input name="profileEmail" type="email" required defaultValue={profile?.email ?? user.email} /></label>
+                <label><span>Телефон</span><input name="phone" type="tel" defaultValue={profile?.phone || user.phone || ''} placeholder="+7 900 000-00-00" /></label>
+              </div>
+              {profileMessage && <div className="profile-feedback is-success" role="status">{profileMessage}</div>}
+              {profileError && <div className="profile-feedback is-error" role="alert">{profileError}</div>}
+              <Button type="submit" disabled={isProfileSaving}>{isProfileSaving ? 'Сохраняем...' : 'Сохранить изменения'}</Button>
+            </form>
           </div>
         </div>
       ) : (
