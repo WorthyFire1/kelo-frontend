@@ -599,7 +599,9 @@ textarea { resize: vertical; }
 .admin-badge.is-muted { background: #f0f1f0; color: #737d76; }
 .admin-table-empty { height: 120px; color: var(--muted) !important; text-align: center; }
 .admin-table-caption { padding: 12px 14px 0; color: #8a958e; font-size: .68rem; text-align: right; }
+.admin-row-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .admin-row-action { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 8px; background: white; color: var(--muted); }
+.admin-row-action:hover { border-color: var(--green-200); background: var(--green-50); color: var(--green-800); }
 .admin-row-action.is-danger:hover { border-color: #efd1cd; background: #fff3f1; color: var(--danger); }
 .admin-backend-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 .admin-backend-grid article { min-height: 82px; display: flex; align-items: center; gap: 13px; padding: 17px 18px; border: 1px solid #dfe7e1; border-radius: 14px; background: white; }

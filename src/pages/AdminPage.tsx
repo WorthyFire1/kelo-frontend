@@ -12,6 +12,7 @@ import {
   LogOut,
   Menu,
   PackageCheck,
+  Pencil,
   Percent,
   Plus,
   RefreshCw,
@@ -26,7 +27,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { adminService, type AdminProduct } from '@/services/adminService';
+import { adminService, type AdminProduct, type AdminProductDetails } from '@/services/adminService';
 import { useAuthStore } from '@/store/useAuthStore';
 
 type AdminSection = 'overview' | 'products' | 'orders' | 'users' | 'discounts' | 'blog' | 'custom-orders';
@@ -77,11 +78,13 @@ function formatDate(value: string | null) {
   return Number.isNaN(date.getTime()) ? '—' : dateFormatter.format(date);
 }
 
-function ProductTable({ products, compact = false, onDelete, deletingId }: { products: AdminProduct[]; compact?: boolean; onDelete?: (product: AdminProduct) => void; deletingId?: number }) {
+function ProductTable({ products, compact = false, onEdit, onDelete, editingId, deletingId }: { products: AdminProduct[]; compact?: boolean; onEdit?: (product: AdminProduct) => void; onDelete?: (product: AdminProduct) => void; editingId?: number; deletingId?: number }) {
+  const hasActions = Boolean(onEdit || onDelete);
+
   return (
     <div className="admin-table-scroll">
       <table className="admin-table">
-        <thead><tr><th>Товар</th><th>Категория</th><th>Цена</th><th>Остаток</th><th>Статус</th>{onDelete && <th aria-label="Действия" />}</tr></thead>
+        <thead><tr><th>Товар</th><th>Категория</th><th>Цена</th><th>Остаток</th><th>Статус</th>{hasActions && <th aria-label="Действия" />}</tr></thead>
         <tbody>
           {products.map((product) => (
             <tr key={product.id}>
@@ -95,10 +98,13 @@ function ProductTable({ products, compact = false, onDelete, deletingId }: { pro
               <td><strong>{formatMoney(product.price)}</strong></td>
               <td>{product.stockQuantity} шт.</td>
               <td><span className={`admin-badge ${product.isActive !== false && product.stockQuantity > 0 ? 'is-success' : 'is-muted'}`}>{product.isActive === false ? 'Скрыт' : product.stockQuantity > 0 ? 'В наличии' : 'Нет в наличии'}</span></td>
-              {onDelete && <td><button className="admin-row-action is-danger" type="button" disabled={deletingId === product.id} onClick={() => onDelete(product)} aria-label={`Удалить ${product.name}`}><Trash2 size={16} /></button></td>}
+              {hasActions && <td><div className="admin-row-actions">
+                {onEdit && <button className="admin-row-action" type="button" disabled={editingId === product.id} onClick={() => onEdit(product)} aria-label={`Редактировать ${product.name}`}>{editingId === product.id ? <RefreshCw className="spin" size={16} /> : <Pencil size={16} />}</button>}
+                {onDelete && <button className="admin-row-action is-danger" type="button" disabled={deletingId === product.id} onClick={() => onDelete(product)} aria-label={`Удалить ${product.name}`}><Trash2 size={16} /></button>}
+              </div></td>}
             </tr>
           ))}
-          {!products.length && <tr><td className="admin-table-empty" colSpan={onDelete ? 6 : 5}>Товары не найдены.</td></tr>}
+          {!products.length && <tr><td className="admin-table-empty" colSpan={hasActions ? 6 : 5}>Товары не найдены.</td></tr>}
         </tbody>
       </table>
       {compact && products.length > 0 && <div className="admin-table-caption">Последние товары из актуального каталога backend</div>}
@@ -142,6 +148,7 @@ export function AdminPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [productSearch, setProductSearch] = useState('');
   const [productFormOpen, setProductFormOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<AdminProductDetails | null>(null);
   const [orderStatus, setOrderStatus] = useState('');
 
   const dashboardQuery = useQuery({ queryKey: ['admin', 'stats'], queryFn: adminService.getStats, enabled: section === 'overview' });
@@ -155,6 +162,24 @@ export function AdminPage() {
     mutationFn: adminService.createProduct,
     onSuccess: async () => {
       setProductFormOpen(false);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['admin', 'products'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] }),
+      ]);
+    },
+  });
+  const loadProductMutation = useMutation({
+    mutationFn: adminService.getProduct,
+    onSuccess: (product) => {
+      setEditingProduct(product);
+      setProductFormOpen(true);
+    },
+  });
+  const updateProductMutation = useMutation({
+    mutationFn: adminService.updateProduct,
+    onSuccess: async () => {
+      setProductFormOpen(false);
+      setEditingProduct(null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['admin', 'products'] }),
         queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] }),
@@ -192,11 +217,30 @@ export function AdminPage() {
     navigate('/');
   };
 
-  const createProduct = (event: FormEvent<HTMLFormElement>) => {
+  const openCreateProduct = () => {
+    setEditingProduct(null);
+    createProductMutation.reset();
+    updateProductMutation.reset();
+    setProductFormOpen(true);
+  };
+
+  const openEditProduct = (product: AdminProduct) => {
+    createProductMutation.reset();
+    updateProductMutation.reset();
+    loadProductMutation.mutate(product.id);
+  };
+
+  const closeProductForm = () => {
+    if (createProductMutation.isPending || updateProductMutation.isPending) return;
+    setProductFormOpen(false);
+    setEditingProduct(null);
+  };
+
+  const saveProduct = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     const stockQuantity = Number(data.get('stockQuantity'));
-    createProductMutation.mutate({
+    const product = {
       name: String(data.get('name') ?? '').trim(),
       shortDescription: String(data.get('shortDescription') ?? '').trim(),
       fullDescription: String(data.get('fullDescription') ?? '').trim(),
@@ -208,7 +252,14 @@ export function AdminPage() {
       isNew: data.get('isNew') === 'on',
       isActive: data.get('isActive') === 'on',
       mainImageUrl: String(data.get('mainImageUrl') ?? '').trim(),
-    });
+    };
+
+    if (editingProduct) {
+      updateProductMutation.mutate({ ...editingProduct, ...product });
+      return;
+    }
+
+    createProductMutation.mutate(product);
   };
 
   const deleteProduct = (product: AdminProduct) => {
@@ -271,10 +322,11 @@ export function AdminPage() {
 
           {section === 'products' && (
             <section className="admin-panel-card">
-              <div className="admin-section-heading"><div><span className="admin-kicker">Каталог</span><h2>Все товары</h2><p>{productsQuery.data ? `${productsQuery.data.total} позиций в backend` : 'Актуальные позиции магазина'}</p></div><button type="button" onClick={() => setProductFormOpen(true)}><Plus size={17} /> Добавить товар</button></div>
+              <div className="admin-section-heading"><div><span className="admin-kicker">Каталог</span><h2>Все товары</h2><p>{productsQuery.data ? `${productsQuery.data.total} позиций в backend` : 'Актуальные позиции магазина'}</p></div><button type="button" onClick={openCreateProduct}><Plus size={17} /> Добавить товар</button></div>
               <div className="admin-toolbar"><label><Search size={18} /><input value={productSearch} onChange={(event) => setProductSearch(event.target.value)} placeholder="Название, категория или ID" /></label><button type="button" onClick={() => void productsQuery.refetch()}><RefreshCw size={17} /> Обновить</button></div>
               <QueryState isPending={productsQuery.isPending} isError={productsQuery.isError} onRetry={() => void productsQuery.refetch()} />
-              {productsQuery.data && <ProductTable products={filteredProducts} onDelete={deleteProduct} deletingId={deleteProductMutation.variables} />}
+              {productsQuery.data && <ProductTable products={filteredProducts} onEdit={openEditProduct} onDelete={deleteProduct} editingId={loadProductMutation.variables} deletingId={deleteProductMutation.variables} />}
+              {loadProductMutation.isError && <div className="admin-mutation-error">Не удалось загрузить товар для редактирования. Проверьте ответ backend.</div>}
               {deleteProductMutation.isError && <div className="admin-mutation-error">Не удалось удалить товар. Проверьте ответ backend.</div>}
             </section>
           )}
@@ -333,27 +385,28 @@ export function AdminPage() {
       </main>
 
       {productFormOpen && (
-        <div className="admin-modal" role="dialog" aria-modal="true" aria-labelledby="create-product-title">
-          <button className="admin-modal__overlay" type="button" onClick={() => setProductFormOpen(false)} aria-label="Закрыть форму" />
+        <div className="admin-modal" role="dialog" aria-modal="true" aria-labelledby="product-form-title">
+          <button className="admin-modal__overlay" type="button" onClick={closeProductForm} aria-label="Закрыть форму" />
           <div className="admin-modal__panel">
-            <div className="admin-modal__header"><div><span className="admin-kicker">Каталог</span><h2 id="create-product-title">Новый товар</h2></div><button type="button" onClick={() => setProductFormOpen(false)} aria-label="Закрыть"><X /></button></div>
-            <form onSubmit={createProduct}>
+            <div className="admin-modal__header"><div><span className="admin-kicker">Каталог</span><h2 id="product-form-title">{editingProduct ? 'Редактирование товара' : 'Новый товар'}</h2></div><button type="button" onClick={closeProductForm} aria-label="Закрыть"><X /></button></div>
+            <form key={editingProduct?.id ?? 'new'} onSubmit={saveProduct}>
               <div className="admin-form-grid">
-                <label className="admin-form-wide"><span>Название</span><input name="name" required maxLength={200} /></label>
-                <label><span>Цена, ₽</span><input name="price" type="number" required min="0" step="0.01" /></label>
-                <label><span>Остаток, шт.</span><input name="stockQuantity" type="number" required min="0" step="1" /></label>
-                <label><span>Артикул</span><input name="sku" required maxLength={100} /></label>
-                <label><span>Ссылка на изображение</span><input name="mainImageUrl" type="url" maxLength={200} placeholder="https://..." /></label>
-                <label className="admin-form-wide"><span>Краткое описание</span><textarea name="shortDescription" required maxLength={1000} rows={3} /></label>
-                <label className="admin-form-wide"><span>Полное описание</span><textarea name="fullDescription" required rows={5} /></label>
+                <label className="admin-form-wide"><span>Название</span><input name="name" required maxLength={200} defaultValue={editingProduct?.name ?? ''} /></label>
+                <label><span>Цена, ₽</span><input name="price" type="number" required min="0" step="0.01" defaultValue={editingProduct?.price ?? ''} /></label>
+                <label><span>Остаток, шт.</span><input name="stockQuantity" type="number" required min="0" step="1" defaultValue={editingProduct?.stockQuantity ?? ''} /></label>
+                <label><span>Артикул</span><input name="sku" required maxLength={100} defaultValue={editingProduct?.sku ?? ''} /></label>
+                <label><span>Ссылка на изображение</span><input name="mainImageUrl" type="url" maxLength={200} placeholder="https://..." defaultValue={editingProduct?.mainImageUrl ?? ''} /></label>
+                <label className="admin-form-wide"><span>Краткое описание</span><textarea name="shortDescription" required maxLength={1000} rows={3} defaultValue={editingProduct?.shortDescription ?? ''} /></label>
+                <label className="admin-form-wide"><span>Полное описание</span><textarea name="fullDescription" required rows={5} defaultValue={editingProduct?.fullDescription ?? ''} /></label>
               </div>
               <div className="admin-check-grid">
-                <label><input name="isActive" type="checkbox" defaultChecked /> Активен</label>
-                <label><input name="isNew" type="checkbox" /> Новинка</label>
-                <label><input name="isOnSale" type="checkbox" /> Участвует в акции</label>
+                <label><input name="isActive" type="checkbox" defaultChecked={editingProduct?.isActive ?? true} /> Активен</label>
+                <label><input name="isNew" type="checkbox" defaultChecked={editingProduct?.isNew ?? false} /> Новинка</label>
+                <label><input name="isOnSale" type="checkbox" defaultChecked={editingProduct?.isOnSale ?? false} /> Участвует в акции</label>
               </div>
               {createProductMutation.isError && <div className="admin-mutation-error">Товар не создан. Проверьте обязательные поля и ответ backend.</div>}
-              <div className="admin-modal__actions"><button type="button" onClick={() => setProductFormOpen(false)}>Отмена</button><button type="submit" disabled={createProductMutation.isPending}>{createProductMutation.isPending ? 'Создаём...' : 'Создать товар'}</button></div>
+              {updateProductMutation.isError && <div className="admin-mutation-error">Изменения не сохранены. Проверьте ответ backend.</div>}
+              <div className="admin-modal__actions"><button type="button" onClick={closeProductForm}>Отмена</button><button type="submit" disabled={createProductMutation.isPending || updateProductMutation.isPending}>{createProductMutation.isPending ? 'Создаём...' : updateProductMutation.isPending ? 'Сохраняем...' : editingProduct ? 'Сохранить изменения' : 'Создать товар'}</button></div>
             </form>
           </div>
         </div>
@@ -361,4 +414,3 @@ export function AdminPage() {
     </div>
   );
 }
-

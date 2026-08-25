@@ -86,6 +86,21 @@ export interface CreateAdminProduct {
   mainImageUrl: string;
 }
 
+export interface AdminProductDetails extends CreateAdminProduct {
+  id: number;
+  oldPrice: number | null;
+  costPrice: number | null;
+  lowStockThreshold: number | null;
+  slug: string;
+  averageRating: number | null;
+  reviewCount: number;
+  createdAt: string;
+  updatedAt: string | null;
+  categoryId: number | null;
+  brandId: number | null;
+  materialId: number | null;
+}
+
 export interface AdminDiscount {
   id: number;
   code: string;
@@ -129,8 +144,42 @@ export const adminService = {
     return apiRequest<CatalogAdminData>('/admin/products?page=1&pageSize=100');
   },
 
+  getProduct(id: number): Promise<AdminProductDetails> {
+    return apiRequest<AdminProductDetails>(`/admin/products/${id}`);
+  },
+
   createProduct(product: CreateAdminProduct): Promise<{ message: string; productId: number }> {
     return apiRequest('/admin/products', { method: 'POST', body: JSON.stringify(product) });
+  },
+
+  updateProduct(product: AdminProductDetails): Promise<{ message: string }> {
+    const body: AdminProductDetails = {
+      id: product.id,
+      name: product.name,
+      shortDescription: product.shortDescription,
+      fullDescription: product.fullDescription,
+      price: product.price,
+      oldPrice: product.oldPrice,
+      costPrice: product.costPrice,
+      sku: product.sku,
+      stockQuantity: product.stockQuantity,
+      lowStockThreshold: product.lowStockThreshold,
+      isInStock: product.isInStock,
+      isOnSale: product.isOnSale,
+      isNew: product.isNew,
+      isActive: product.isActive,
+      mainImageUrl: product.mainImageUrl,
+      slug: product.slug,
+      averageRating: product.averageRating,
+      reviewCount: product.reviewCount,
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt,
+      categoryId: product.categoryId,
+      brandId: product.brandId,
+      materialId: product.materialId,
+    };
+
+    return apiRequest(`/admin/products/${product.id}`, { method: 'PUT', body: JSON.stringify(body) });
   },
 
   deleteProduct(id: number): Promise<{ message: string }> {
@@ -159,4 +208,3 @@ export const adminService = {
     return apiRequest<BlogAdminData>('/blog?page=1&pageSize=100');
   },
 };
-
