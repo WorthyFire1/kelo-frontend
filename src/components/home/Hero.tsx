@@ -103,8 +103,6 @@ export function Hero({ readySketches = 120, averageRating = 4.9, guaranteeMonths
 
   const slide = slides[activeSlide];
   const image = slide.images[activeImage];
-  const slideNumber = String(activeSlide + 1).padStart(2, '0');
-  const slidesCount = String(slides.length).padStart(2, '0');
 
   return (
     <section
@@ -152,7 +150,6 @@ export function Hero({ readySketches = 120, averageRating = 4.9, guaranteeMonths
             <button type="button" onClick={showPrevious} aria-label="Предыдущая фотография">
               <ArrowLeft size={18} />
             </button>
-            <span><strong>{slideNumber}</strong><i>/</i>{slidesCount}</span>
             <button type="button" onClick={showNext} aria-label="Следующая фотография">
               <ArrowRight size={18} />
             </button>
