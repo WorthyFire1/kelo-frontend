@@ -140,8 +140,8 @@ summary { cursor: pointer; }
 .hero-slider__backdrop { position: absolute; inset: -28px; z-index: 0; background: center / cover no-repeat; filter: blur(20px); opacity: .65; transform: scale(1.08); }
 .hero-slider__media::after { content: ""; position: absolute; inset: 0; z-index: 1; background: linear-gradient(135deg, rgba(8, 29, 18, .18), rgba(8, 29, 18, .04)); pointer-events: none; }
 .hero-slider__media > img { position: relative; z-index: 2; width: 100%; height: 100%; object-fit: contain; animation: hero-slide-in .5s ease both; }
-.hero-slider__controls { position: absolute; right: 18px; bottom: 18px; z-index: 3; display: flex; align-items: center; gap: 8px; }
-.hero-slider__controls button { width: 38px; height: 38px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: var(--green-800); color: var(--white); transition: .2s ease; }
+.hero-slider__controls { position: absolute; top: 50%; right: 16px; left: 16px; z-index: 3; display: flex; align-items: center; justify-content: space-between; transform: translateY(-50%); pointer-events: none; }
+.hero-slider__controls button { width: 42px; height: 42px; display: grid; place-items: center; padding: 0; border: 1px solid rgba(255, 255, 255, .72); border-radius: 50%; background: rgba(31, 106, 64, .92); color: var(--white); box-shadow: 0 8px 22px rgba(9, 30, 18, .24); backdrop-filter: blur(8px); transition: .2s ease; pointer-events: auto; }
 .hero-slider__controls button:hover { background: var(--green-700); transform: translateY(-1px); }
 .hero-slider__controls button:focus-visible { outline: 3px solid var(--green-200); outline-offset: 2px; }
 @keyframes hero-slide-in { from { opacity: .45; transform: scale(1.025); } to { opacity: 1; transform: scale(1); } }
@@ -792,7 +792,7 @@ textarea { resize: vertical; }
   .hero__visual { height: 390px; }
   .hero__visual > .image-placeholder { border-radius: 72px 20px 72px 20px; }
   .hero-slider__media { height: 520px; border-radius: 72px 20px 72px 20px; }
-  .hero-slider__controls { right: 12px; bottom: 12px; }
+  .hero-slider__controls { right: 10px; left: 10px; }
   .hero__floating-card { right: 10px; bottom: 18px; }
   .hero__stats { gap: 18px; }
   .hero__stats div { flex: 1; min-width: 84px; }
