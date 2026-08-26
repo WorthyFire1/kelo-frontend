@@ -37,7 +37,7 @@ const slides = [
     description: 'Архитектурные фасады добавляют мебели объём, глубину и характер, раскрывая потенциал современного интерьера.',
     catalogPath: '/catalog?category=facades-3d',
     images: [
-      { src: '/images/hero/officers-house.webp', alt: 'Архитектурный фасад Дома офицеров' },
+      { src: '/images/hero/officers-house.webp', alt: 'Резное деревянное панно с фасадом Дома офицеров' },
     ],
   },
 ] satisfies HeroSlide[];
