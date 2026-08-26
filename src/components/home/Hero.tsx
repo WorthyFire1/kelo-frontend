@@ -3,28 +3,46 @@ import { ArrowLeft, ArrowRight, PlayCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Container } from '@/components/ui/Container';
 
+interface HeroSlide {
+  eyebrow: string;
+  title: string;
+  description: string;
+  catalogPath: string;
+  images: Array<{ src: string; alt: string }>;
+}
+
 const slides = [
-  { src: '/images/slider/slide-01.webp', alt: 'Пряничная форма с птицей и готовый пряник' },
-  { src: '/images/slider/slide-02.webp', alt: 'Пряничная форма с Дедом Морозом в праздничной композиции' },
-  { src: '/images/slider/slide-03.webp', alt: 'Деревянная форма и пряник в виде Деда Мороза' },
-  { src: '/images/slider/slide-04.webp', alt: 'Готовые пряники рядом с формой Деда Мороза' },
-  { src: '/images/slider/slide-05.webp', alt: 'Деревянная форма для пряника и праздничные ингредиенты' },
-  { src: '/images/slider/slide-06.webp', alt: 'Пряники в виде Деда Мороза и деревянная форма' },
-  { src: '/images/slider/slide-07.webp', alt: 'Крупный план формы и пряника в виде Деда Мороза' },
-  { src: '/images/slider/slide-08.webp', alt: 'Праздничная композиция с деревянной формой и пряниками' },
-  { src: '/images/slider/slide-09.webp', alt: 'Деревянная форма и пряник в виде Щелкунчика' },
-  { src: '/images/slider/slide-10.webp', alt: 'Пряник Щелкунчик рядом с деревянной формой' },
-  { src: '/images/slider/slide-11.webp', alt: 'Крупный план деревянной формы Щелкунчика' },
-  { src: '/images/slider/slide-12.webp', alt: 'Форма Щелкунчика в праздничной сервировке' },
-  { src: '/images/slider/slide-13.webp', alt: 'Пряник Щелкунчик и деревянная форма на фоне ёлки' },
-  { src: '/images/slider/slide-14.webp', alt: 'Пряничная форма и пряник в виде оленя' },
-  { src: '/images/slider/slide-15.webp', alt: 'Олень из пряничного теста рядом с деревянной формой' },
-  { src: '/images/slider/slide-16.webp', alt: 'Деревянная форма оленя и готовые пряники' },
-  { src: '/images/slider/slide-17.webp', alt: 'Светлый и шоколадный пряники в виде оленя' },
-  { src: '/images/slider/slide-18.webp', alt: 'Пряники-олени и деревянная форма ручной работы' },
-  { src: '/images/slider/slide-19.webp', alt: 'Крупный план пряников в виде оленя' },
-  { src: '/images/slider/slide-20.webp', alt: 'Деревянная форма и пряник в виде шишки' },
-];
+  {
+    eyebrow: 'Для кухни',
+    title: 'Кухонная утварь и принадлежности из дерева',
+    description: 'Природа вдохновляет на творчество, дерево сохраняет тепло ваших рук, чтобы вы могли делиться им с теми, кто вам по-настоящему дорог.',
+    catalogPath: '/catalog?category=kitchenware',
+    images: [
+      { src: '/images/hero/octopus-menazhnitsa.webp', alt: 'Деревянная менажница в форме осьминога' },
+      { src: '/images/hero/snail-menazhnitsa.webp', alt: 'Деревянная менажница в форме улитки с ложкой' },
+    ],
+  },
+  {
+    eyebrow: 'Для творчества',
+    title: 'Сувениры, творчество и декор',
+    description: 'Мы бережно вытачиваем форму из природного материала, чтобы вы могли вдохнуть в неё характер и создать неповторимый подарок.',
+    catalogPath: '/catalog?category=souvenirs-decor',
+    images: [
+      { src: '/images/hero/knight-placeholder.webp', alt: 'Деревянная фигурка средневекового рыцаря' },
+    ],
+  },
+  {
+    eyebrow: 'Объёмный декор',
+    title: '3D-фасады',
+    description: 'Архитектурные фасады добавляют мебели объём, глубину и характер, раскрывая потенциал современного интерьера.',
+    catalogPath: '/catalog?category=facades-3d',
+    images: [
+      { src: '/images/hero/officers-house.webp', alt: 'Архитектурный фасад Дома офицеров' },
+    ],
+  },
+] satisfies HeroSlide[];
+
+const SLIDE_DELAY = 5000;
 
 interface HeroProps {
   readySketches?: number;
@@ -34,30 +52,42 @@ interface HeroProps {
 
 export function Hero({ readySketches = 120, averageRating = 4.9, guaranteeMonths = 6 }: HeroProps) {
   const [activeSlide, setActiveSlide] = useState(0);
+  const [activeImage, setActiveImage] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const touchStartX = useRef<number | null>(null);
 
   useEffect(() => {
     if (isPaused || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
-    const interval = window.setInterval(() => {
-      setActiveSlide((current) => (current + 1) % slides.length);
-    }, 5000);
+    const timeout = window.setTimeout(() => {
+      if (activeImage + 1 < slides[activeSlide].images.length) {
+        setActiveImage((current) => current + 1);
+        return;
+      }
 
-    return () => window.clearInterval(interval);
-  }, [isPaused]);
+      setActiveSlide((current) => (current + 1) % slides.length);
+      setActiveImage(0);
+    }, SLIDE_DELAY);
+
+    return () => window.clearTimeout(timeout);
+  }, [activeImage, activeSlide, isPaused]);
 
   useEffect(() => {
+    const currentSlide = slides[activeSlide];
+    const nextSource = currentSlide.images[activeImage + 1]?.src
+      ?? slides[(activeSlide + 1) % slides.length].images[0].src;
     const nextImage = new Image();
-    nextImage.src = slides[(activeSlide + 1) % slides.length].src;
-  }, [activeSlide]);
+    nextImage.src = nextSource;
+  }, [activeImage, activeSlide]);
 
   const showPrevious = () => {
     setActiveSlide((current) => (current - 1 + slides.length) % slides.length);
+    setActiveImage(0);
   };
 
   const showNext = () => {
     setActiveSlide((current) => (current + 1) % slides.length);
+    setActiveImage(0);
   };
 
   const handleTouchEnd = (event: React.TouchEvent<HTMLElement>) => {
@@ -72,13 +102,14 @@ export function Hero({ readySketches = 120, averageRating = 4.9, guaranteeMonths
   };
 
   const slide = slides[activeSlide];
+  const image = slide.images[activeImage];
   const slideNumber = String(activeSlide + 1).padStart(2, '0');
   const slidesCount = String(slides.length).padStart(2, '0');
 
   return (
     <section
       className="hero hero--slider"
-      aria-label="Фотографии изделий КЕЛО"
+      aria-label="Направления изделий КЕЛО"
       aria-roledescription="карусель"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
@@ -91,13 +122,11 @@ export function Hero({ readySketches = 120, averageRating = 4.9, guaranteeMonths
     >
       <Container className="hero__inner">
         <div className="hero__content">
-          <span className="eyebrow">Собственное производство</span>
-          <h1>Пряничные формы с характером</h1>
-          <p>
-            Деревянные формы КЕЛО помогают создавать выразительные пряники для праздников, подарков и тёплых семейных традиций.
-          </p>
+          <span className="eyebrow">{slide.eyebrow}</span>
+          <h1>{slide.title}</h1>
+          <p>{slide.description}</p>
           <div className="hero__actions">
-            <Link className="button button--primary" to="/catalog">Перейти в каталог <ArrowRight size={18} /></Link>
+            <Link className="button button--primary" to={slide.catalogPath}>Перейти в каталог <ArrowRight size={18} /></Link>
             <Link className="button button--secondary" to="/about"><PlayCircle size={18} /> О производстве</Link>
           </div>
           <div className="hero__stats">
@@ -109,16 +138,16 @@ export function Hero({ readySketches = 120, averageRating = 4.9, guaranteeMonths
         <div className="hero-slider__media">
           <div
             className="hero-slider__backdrop"
-            style={{ backgroundImage: `url(${slide.src})` }}
+            style={{ backgroundImage: `url(${image.src})` }}
             aria-hidden="true"
           />
           <img
-            key={slide.src}
-            src={slide.src}
-            alt={slide.alt}
+            key={image.src}
+            src={image.src}
+            alt={image.alt}
             fetchPriority="high"
           />
-          <span className="sr-only" aria-live="polite">Фотография {activeSlide + 1} из {slides.length}</span>
+          <span className="sr-only" aria-live="polite">{slide.title}. Слайд {activeSlide + 1} из {slides.length}</span>
           <div className="hero-slider__controls">
             <button type="button" onClick={showPrevious} aria-label="Предыдущая фотография">
               <ArrowLeft size={18} />
