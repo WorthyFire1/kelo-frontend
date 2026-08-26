@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState, type FormEvent } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LogOut, Package, Percent, ShieldCheck, UserRound } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Breadcrumbs } from '@/components/ui/Breadcrumbs';
@@ -14,6 +14,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 export function AccountPage() {
   useDocumentTitle('Личный кабинет');
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
   const setSession = useAuthStore((state) => state.setSession);
   const updateUser = useAuthStore((state) => state.updateUser);
@@ -25,10 +26,15 @@ export function AccountPage() {
   const [profileError, setProfileError] = useState('');
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const profileQuery = useQuery({
-    queryKey: ['user', 'profile'],
+    queryKey: ['user', 'profile', user?.id],
     queryFn: userService.getProfile,
-    enabled: Boolean(user),
+    enabled: Boolean(user?.id),
   });
+
+  useEffect(() => {
+    setProfileMessage('');
+    setProfileError('');
+  }, [user?.id]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -74,6 +80,9 @@ export function AccountPage() {
 
   const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (!user || profileQuery.isPending || profileQuery.isFetching) return;
+
     const data = new FormData(event.currentTarget);
     const profile = {
       firstName: String(data.get('firstName') ?? '').trim(),
@@ -97,8 +106,16 @@ export function AccountPage() {
     }
   };
 
+  const handleLogout = () => {
+    queryClient.removeQueries({ queryKey: ['user', 'profile'] });
+    setProfileMessage('');
+    setProfileError('');
+    logout();
+  };
+
   const roleLabel = user?.isAdmin ? 'Администратор' : 'Пользователь';
   const profile = profileQuery.data;
+  const isProfileLoading = profileQuery.isPending || profileQuery.isFetching;
 
   return (
     <Container className="page-shell">
@@ -111,7 +128,7 @@ export function AccountPage() {
             <strong>{user.name}</strong>
             <span className="account-email">{user.email}</span>
             <span className="account-role">{roleLabel}</span>
-            <button type="button" onClick={logout}><LogOut size={17} /> Выйти</button>
+            <button type="button" onClick={handleLogout}><LogOut size={17} /> Выйти</button>
           </aside>
           <div className="account-content">
             <div className="demo-note">Авторизация подключена к серверу. Заказы, адреса и скидки появятся после подключения соответствующих разделов API.</div>
@@ -125,7 +142,7 @@ export function AccountPage() {
                 <Link className="button button--primary" to="/admin">Открыть админ-панель</Link>
               </section>
             )}
-            <form className="profile-form-section" key={profile ? `${profile.firstName}-${profile.lastName}-${profile.email}-${profile.phone}` : 'session-profile'} onSubmit={saveProfile}>
+            <form className="profile-form-section" key={profile ? `${user.id}-${profile.firstName}-${profile.lastName}-${profile.email}-${profile.phone}` : `${user.id}-session-profile`} onSubmit={saveProfile}>
               <h2>Контактные данные</h2>
               <div className="form-grid">
                 <label><span>Имя</span><input name="firstName" required defaultValue={profile?.firstName ?? user.firstName} /></label>
@@ -135,7 +152,7 @@ export function AccountPage() {
               </div>
               {profileMessage && <div className="profile-feedback is-success" role="status">{profileMessage}</div>}
               {profileError && <div className="profile-feedback is-error" role="alert">{profileError}</div>}
-              <Button type="submit" disabled={isProfileSaving}>{isProfileSaving ? 'Сохраняем...' : 'Сохранить изменения'}</Button>
+              <Button type="submit" disabled={isProfileLoading || isProfileSaving}>{isProfileLoading ? 'Загружаем...' : isProfileSaving ? 'Сохраняем...' : 'Сохранить изменения'}</Button>
             </form>
           </div>
         </div>

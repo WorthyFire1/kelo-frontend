@@ -213,6 +213,7 @@ export function AdminPage() {
   };
 
   const signOut = () => {
+    queryClient.removeQueries({ queryKey: ['user', 'profile'] });
     logout();
     navigate('/');
   };
