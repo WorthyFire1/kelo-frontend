@@ -72,33 +72,68 @@ export interface AdminUsersData {
   pageSize: number;
 }
 
-export interface CreateAdminProduct {
+export interface AdminProductInput {
   name: string;
   shortDescription: string;
   fullDescription: string;
   price: number;
-  sku: string;
-  stockQuantity: number;
-  isInStock: boolean;
-  isOnSale: boolean;
-  isNew: boolean;
-  isActive: boolean;
-  mainImageUrl: string;
-}
-
-export interface AdminProductDetails extends CreateAdminProduct {
-  id: number;
   oldPrice: number | null;
   costPrice: number | null;
+  sku: string;
+  stockQuantity: number;
   lowStockThreshold: number | null;
+  isNew: boolean;
+  isActive: boolean;
+  categoryId: number;
+  brandId: number;
+  materialId: number;
+  imageFile: File | null;
+  removeImage: boolean;
+}
+
+export interface UpdateAdminProduct extends AdminProductInput {
+  id: number;
+  mainImageUrl: string | null;
   slug: string;
-  averageRating: number | null;
-  reviewCount: number;
-  createdAt: string;
-  updatedAt: string | null;
+}
+
+export interface AdminProductDetails {
+  id: number;
+  name: string;
+  shortDescription: string | null;
+  fullDescription: string | null;
+  price: number;
+  oldPrice: number | null;
+  costPrice: number | null;
+  sku: string | null;
+  stockQuantity: number;
+  lowStockThreshold: number | null;
+  isNew: boolean;
+  isActive: boolean;
+  mainImageUrl: string | null;
+  slug: string;
   categoryId: number | null;
   brandId: number | null;
   materialId: number | null;
+}
+
+export interface AdminProductOption {
+  id: number;
+  name: string;
+}
+
+export interface AdminProductOptions {
+  categories: AdminProductOption[];
+  brands: AdminProductOption[];
+  materials: AdminProductOption[];
+}
+
+interface AdminBrandsData {
+  brands: AdminProductOption[];
+}
+
+interface CatalogOptionsData {
+  materials: AdminProductOption[];
 }
 
 export interface AdminDiscount {
@@ -135,6 +170,26 @@ export interface BlogAdminData {
   categories: string[];
 }
 
+function createProductFormData(product: AdminProductInput): FormData {
+  const formData = new FormData();
+  formData.append('Name', product.name);
+  formData.append('ShortDescription', product.shortDescription);
+  formData.append('FullDescription', product.fullDescription);
+  formData.append('Price', String(product.price));
+  if (product.oldPrice !== null) formData.append('OldPrice', String(product.oldPrice));
+  if (product.costPrice !== null) formData.append('CostPrice', String(product.costPrice));
+  formData.append('Sku', product.sku);
+  formData.append('StockQuantity', String(product.stockQuantity));
+  if (product.lowStockThreshold !== null) formData.append('LowStockThreshold', String(product.lowStockThreshold));
+  formData.append('IsNew', String(product.isNew));
+  formData.append('IsActive', String(product.isActive));
+  formData.append('CategoryId', String(product.categoryId));
+  formData.append('BrandId', String(product.brandId));
+  formData.append('MaterialId', String(product.materialId));
+  if (product.imageFile) formData.append('ImageFile', product.imageFile);
+  return formData;
+}
+
 export const adminService = {
   getStats(): Promise<AdminStats> {
     return apiRequest<AdminStats>('/admin/stats');
@@ -148,38 +203,27 @@ export const adminService = {
     return apiRequest<AdminProductDetails>(`/admin/products/${id}`);
   },
 
-  createProduct(product: CreateAdminProduct): Promise<{ message: string; productId: number }> {
-    return apiRequest('/admin/products', { method: 'POST', body: JSON.stringify(product) });
+  async getProductOptions(): Promise<AdminProductOptions> {
+    const [categories, brandsData, catalogData] = await Promise.all([
+      apiRequest<AdminProductOption[]>('/admin/categories'),
+      apiRequest<AdminBrandsData>('/admin/brands?page=1&pageSize=100'),
+      apiRequest<CatalogOptionsData>('/catalog/products?page=1&pageSize=1'),
+    ]);
+
+    return { categories, brands: brandsData.brands, materials: catalogData.materials };
   },
 
-  updateProduct(product: AdminProductDetails): Promise<{ message: string }> {
-    const body: AdminProductDetails = {
-      id: product.id,
-      name: product.name,
-      shortDescription: product.shortDescription,
-      fullDescription: product.fullDescription,
-      price: product.price,
-      oldPrice: product.oldPrice,
-      costPrice: product.costPrice,
-      sku: product.sku,
-      stockQuantity: product.stockQuantity,
-      lowStockThreshold: product.lowStockThreshold,
-      isInStock: product.isInStock,
-      isOnSale: product.isOnSale,
-      isNew: product.isNew,
-      isActive: product.isActive,
-      mainImageUrl: product.mainImageUrl,
-      slug: product.slug,
-      averageRating: product.averageRating,
-      reviewCount: product.reviewCount,
-      createdAt: product.createdAt,
-      updatedAt: product.updatedAt,
-      categoryId: product.categoryId,
-      brandId: product.brandId,
-      materialId: product.materialId,
-    };
+  async createProduct(product: AdminProductInput): Promise<void> {
+    await apiRequest('/admin/products', { method: 'POST', body: createProductFormData(product) });
+  },
 
-    return apiRequest(`/admin/products/${product.id}`, { method: 'PUT', body: JSON.stringify(body) });
+  async updateProduct(product: UpdateAdminProduct): Promise<void> {
+    const formData = createProductFormData(product);
+    formData.append('Id', String(product.id));
+    formData.append('Slug', product.slug);
+    if (product.mainImageUrl) formData.append('MainImageUrl', product.mainImageUrl);
+    formData.append('RemoveImage', String(product.removeImage));
+    await apiRequest(`/admin/products/${product.id}`, { method: 'PUT', body: formData });
   },
 
   deleteProduct(id: number): Promise<{ message: string }> {

@@ -78,6 +78,10 @@ function formatDate(value: string | null) {
   return Number.isNaN(date.getTime()) ? '—' : dateFormatter.format(date);
 }
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 function ProductTable({ products, compact = false, onEdit, onDelete, editingId, deletingId }: { products: AdminProduct[]; compact?: boolean; onEdit?: (product: AdminProduct) => void; onDelete?: (product: AdminProduct) => void; editingId?: number; deletingId?: number }) {
   const hasActions = Boolean(onEdit || onDelete);
 
@@ -157,6 +161,7 @@ export function AdminPage() {
   const usersQuery = useQuery({ queryKey: ['admin', 'users'], queryFn: adminService.getUsers, enabled: section === 'users' });
   const discountsQuery = useQuery({ queryKey: ['admin', 'discounts'], queryFn: adminService.getDiscounts, enabled: section === 'discounts' });
   const blogQuery = useQuery({ queryKey: ['admin', 'blog'], queryFn: adminService.getBlogPosts, enabled: section === 'blog' });
+  const productOptionsQuery = useQuery({ queryKey: ['admin', 'product-options'], queryFn: adminService.getProductOptions, enabled: productFormOpen });
 
   const createProductMutation = useMutation({
     mutationFn: adminService.createProduct,
@@ -241,22 +246,39 @@ export function AdminPage() {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     const stockQuantity = Number(data.get('stockQuantity'));
+    const optionalNumber = (name: string) => {
+      const value = String(data.get(name) ?? '').trim();
+      return value ? Number(value) : null;
+    };
+    const imageEntry = data.get('imageFile');
+    const imageFile = imageEntry instanceof File && imageEntry.size > 0 ? imageEntry : null;
+
+    if (imageFile && imageFile.size > 5 * 1024 * 1024) {
+      window.alert('Размер изображения не должен превышать 5 МБ.');
+      return;
+    }
+
     const product = {
       name: String(data.get('name') ?? '').trim(),
       shortDescription: String(data.get('shortDescription') ?? '').trim(),
       fullDescription: String(data.get('fullDescription') ?? '').trim(),
       price: Number(data.get('price')),
+      oldPrice: optionalNumber('oldPrice'),
+      costPrice: optionalNumber('costPrice'),
       sku: String(data.get('sku') ?? '').trim(),
       stockQuantity,
-      isInStock: stockQuantity > 0,
-      isOnSale: data.get('isOnSale') === 'on',
+      lowStockThreshold: optionalNumber('lowStockThreshold'),
       isNew: data.get('isNew') === 'on',
       isActive: data.get('isActive') === 'on',
-      mainImageUrl: String(data.get('mainImageUrl') ?? '').trim(),
+      categoryId: Number(data.get('categoryId')),
+      brandId: Number(data.get('brandId')),
+      materialId: Number(data.get('materialId')),
+      imageFile,
+      removeImage: data.get('removeImage') === 'on' && !imageFile,
     };
 
     if (editingProduct) {
-      updateProductMutation.mutate({ ...editingProduct, ...product });
+      updateProductMutation.mutate({ ...product, id: editingProduct.id, mainImageUrl: editingProduct.mainImageUrl, slug: editingProduct.slug });
       return;
     }
 
@@ -264,7 +286,7 @@ export function AdminPage() {
   };
 
   const deleteProduct = (product: AdminProduct) => {
-    if (window.confirm(`Скрыть товар «${product.name}» из каталога?`)) {
+    if (window.confirm(`Удалить товар «${product.name}»? Это действие нельзя отменить.`)) {
       deleteProductMutation.mutate(product.id);
     }
   };
@@ -327,8 +349,8 @@ export function AdminPage() {
               <div className="admin-toolbar"><label><Search size={18} /><input value={productSearch} onChange={(event) => setProductSearch(event.target.value)} placeholder="Название, категория или ID" /></label><button type="button" onClick={() => void productsQuery.refetch()}><RefreshCw size={17} /> Обновить</button></div>
               <QueryState isPending={productsQuery.isPending} isError={productsQuery.isError} onRetry={() => void productsQuery.refetch()} />
               {productsQuery.data && <ProductTable products={filteredProducts} onEdit={openEditProduct} onDelete={deleteProduct} editingId={loadProductMutation.variables} deletingId={deleteProductMutation.variables} />}
-              {loadProductMutation.isError && <div className="admin-mutation-error">Не удалось загрузить товар для редактирования. Проверьте ответ backend.</div>}
-              {deleteProductMutation.isError && <div className="admin-mutation-error">Не удалось удалить товар. Проверьте ответ backend.</div>}
+              {loadProductMutation.isError && <div className="admin-mutation-error">{getErrorMessage(loadProductMutation.error, 'Не удалось загрузить товар для редактирования.')}</div>}
+              {deleteProductMutation.isError && <div className="admin-mutation-error">{getErrorMessage(deleteProductMutation.error, 'Не удалось удалить товар.')}</div>}
             </section>
           )}
 
@@ -390,24 +412,31 @@ export function AdminPage() {
           <button className="admin-modal__overlay" type="button" onClick={closeProductForm} aria-label="Закрыть форму" />
           <div className="admin-modal__panel">
             <div className="admin-modal__header"><div><span className="admin-kicker">Каталог</span><h2 id="product-form-title">{editingProduct ? 'Редактирование товара' : 'Новый товар'}</h2></div><button type="button" onClick={closeProductForm} aria-label="Закрыть"><X /></button></div>
-            <form key={editingProduct?.id ?? 'new'} onSubmit={saveProduct}>
+            <form key={`${editingProduct?.id ?? 'new'}-${productOptionsQuery.data ? 'ready' : 'loading'}`} onSubmit={saveProduct}>
               <div className="admin-form-grid">
                 <label className="admin-form-wide"><span>Название</span><input name="name" required maxLength={200} defaultValue={editingProduct?.name ?? ''} /></label>
                 <label><span>Цена, ₽</span><input name="price" type="number" required min="0" step="0.01" defaultValue={editingProduct?.price ?? ''} /></label>
+                <label><span>Старая цена, ₽</span><input name="oldPrice" type="number" min="0" step="0.01" defaultValue={editingProduct?.oldPrice ?? ''} /></label>
+                <label><span>Себестоимость, ₽</span><input name="costPrice" type="number" min="0" step="0.01" defaultValue={editingProduct?.costPrice ?? ''} /></label>
                 <label><span>Остаток, шт.</span><input name="stockQuantity" type="number" required min="0" step="1" defaultValue={editingProduct?.stockQuantity ?? ''} /></label>
-                <label><span>Артикул</span><input name="sku" required maxLength={100} defaultValue={editingProduct?.sku ?? ''} /></label>
-                <label><span>Ссылка на изображение</span><input name="mainImageUrl" type="url" maxLength={200} placeholder="https://..." defaultValue={editingProduct?.mainImageUrl ?? ''} /></label>
-                <label className="admin-form-wide"><span>Краткое описание</span><textarea name="shortDescription" required maxLength={1000} rows={3} defaultValue={editingProduct?.shortDescription ?? ''} /></label>
-                <label className="admin-form-wide"><span>Полное описание</span><textarea name="fullDescription" required rows={5} defaultValue={editingProduct?.fullDescription ?? ''} /></label>
+                <label><span>Порог малого остатка</span><input name="lowStockThreshold" type="number" min="0" step="1" defaultValue={editingProduct?.lowStockThreshold ?? ''} /></label>
+                <label><span>Артикул</span><input name="sku" maxLength={100} defaultValue={editingProduct?.sku ?? ''} /></label>
+                <label><span>Категория</span><select name="categoryId" required defaultValue={editingProduct?.categoryId ?? ''}><option value="">Выберите категорию</option>{productOptionsQuery.data?.categories.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
+                <label><span>Бренд</span><select name="brandId" required defaultValue={editingProduct?.brandId ?? ''}><option value="">Выберите бренд</option>{productOptionsQuery.data?.brands.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
+                <label><span>Материал</span><select name="materialId" required defaultValue={editingProduct?.materialId ?? ''}><option value="">Выберите материал</option>{productOptionsQuery.data?.materials.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
+                <label className="admin-form-wide"><span>{editingProduct?.mainImageUrl ? 'Новое изображение (заменит текущее)' : 'Изображение товара'}</span><input name="imageFile" type="file" accept=".jpg,.jpeg,.png,.gif,.webp,image/jpeg,image/png,image/gif,image/webp" /><small>JPG, PNG, GIF или WebP, не более 5 МБ.</small></label>
+                <label className="admin-form-wide"><span>Краткое описание</span><textarea name="shortDescription" maxLength={1000} rows={3} defaultValue={editingProduct?.shortDescription ?? ''} /></label>
+                <label className="admin-form-wide"><span>Полное описание</span><textarea name="fullDescription" rows={5} defaultValue={editingProduct?.fullDescription ?? ''} /></label>
               </div>
               <div className="admin-check-grid">
                 <label><input name="isActive" type="checkbox" defaultChecked={editingProduct?.isActive ?? true} /> Активен</label>
                 <label><input name="isNew" type="checkbox" defaultChecked={editingProduct?.isNew ?? false} /> Новинка</label>
-                <label><input name="isOnSale" type="checkbox" defaultChecked={editingProduct?.isOnSale ?? false} /> Участвует в акции</label>
+                {editingProduct?.mainImageUrl && <label><input name="removeImage" type="checkbox" /> Удалить текущее изображение</label>}
               </div>
-              {createProductMutation.isError && <div className="admin-mutation-error">Товар не создан. Проверьте обязательные поля и ответ backend.</div>}
-              {updateProductMutation.isError && <div className="admin-mutation-error">Изменения не сохранены. Проверьте ответ backend.</div>}
-              <div className="admin-modal__actions"><button type="button" onClick={closeProductForm}>Отмена</button><button type="submit" disabled={createProductMutation.isPending || updateProductMutation.isPending}>{createProductMutation.isPending ? 'Создаём...' : updateProductMutation.isPending ? 'Сохраняем...' : editingProduct ? 'Сохранить изменения' : 'Создать товар'}</button></div>
+              {productOptionsQuery.isError && <div className="admin-mutation-error">{getErrorMessage(productOptionsQuery.error, 'Не удалось загрузить категории, бренды и материалы.')}</div>}
+              {createProductMutation.isError && <div className="admin-mutation-error">{getErrorMessage(createProductMutation.error, 'Товар не создан.')}</div>}
+              {updateProductMutation.isError && <div className="admin-mutation-error">{getErrorMessage(updateProductMutation.error, 'Изменения не сохранены.')}</div>}
+              <div className="admin-modal__actions"><button type="button" onClick={closeProductForm}>Отмена</button><button type="submit" disabled={createProductMutation.isPending || updateProductMutation.isPending || productOptionsQuery.isPending || productOptionsQuery.isError}>{createProductMutation.isPending ? 'Создаём...' : updateProductMutation.isPending ? 'Сохраняем...' : productOptionsQuery.isPending ? 'Загружаем справочники...' : editingProduct ? 'Сохранить изменения' : 'Создать товар'}</button></div>
             </form>
           </div>
         </div>

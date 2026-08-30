@@ -26,10 +26,11 @@ export class ApiError extends Error {
 
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const token = authTokenStorage.get();
+  const isFormData = init?.body instanceof FormData;
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
-      'Content-Type': 'application/json',
+      ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },
