@@ -8,7 +8,7 @@ import { Container } from '@/components/ui/Container';
 
 const navItems = [
   { label: 'Каталог', to: '/catalog' },
-  { label: 'На заказ', to: '/custom-order' },
+  { label: 'Услуги', to: '/custom-order' },
   { label: 'Акции', to: '/promotions' },
   { label: 'Блог', to: '/blog' },
   { label: 'Бренды', to: '/brands' },

@@ -13,16 +13,16 @@ const steps = [
 ];
 
 export function CustomOrderPage() {
-  useDocumentTitle('Изделия на заказ');
+  useDocumentTitle('Столярные изделия на заказ');
 
   return (
     <>
       <Container className="page-shell">
-        <Breadcrumbs items={[{ label: 'Изделия на заказ' }]} />
+        <Breadcrumbs items={[{ label: 'Столярные изделия на заказ' }]} />
         <section className="custom-hero">
           <div>
             <span className="eyebrow">Полный цикл производства</span>
-            <h1>Создадим деревянное изделие по вашей идее</h1>
+            <h1>Столярные изделия на заказ</h1>
             <p>Пряничная доска, логотип, семейный сюжет, подарок для события или небольшая серия для бренда.</p>
             <a className="button button--primary" href="#custom-form">Рассчитать проект</a>
           </div>
