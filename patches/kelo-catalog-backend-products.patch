@@ -1,0 +1,520 @@
+diff --git a/src/services/catalogService.ts b/src/services/catalogService.ts
+--- a/src/services/catalogService.ts
++++ b/src/services/catalogService.ts
+@@ -1,14 +1,25 @@
+ import { apiRequest, resolveApiAssetUrl } from '@/api/client';
++import { articles, brands, promotions } from '@/data/mockData';
++import type {
++  Article,
++  Brand,
++  CatalogFilterOption,
++  CatalogFilters,
++  Category,
++  HomeAdvantage,
++  HomeData,
++  Product,
++  Promotion,
++} from '@/types/catalog';
+-import { articles, brands, categories, products, promotions } from '@/data/mockData';
+-import type { Article, Brand, CatalogFilters, Category, HomeAdvantage, HomeData, Product, Promotion } from '@/types/catalog';
+ 
++const useContentMocks = import.meta.env.VITE_USE_MOCKS !== 'false';
+-const useMocks = import.meta.env.VITE_USE_MOCKS !== 'false';
+ const delay = (ms = 180) => new Promise((resolve) => window.setTimeout(resolve, ms));
++const catalogPageSize = 1000;
+ 
++interface ApiProductDto {
+-interface HomeProductDto {
+   id: number;
+   name: string;
++  shortDescription?: string | null;
+-  shortDescription: string;
+   price: number;
+   oldPrice?: number | null;
+   mainImageUrl?: string | null;
+@@ -25,12 +36,59 @@
+   categoryName?: string | null;
+ }
+ 
++interface ApiCategoryDto {
++  id: number;
++  name: string;
++  description?: string | null;
++  slug: string;
++  productCount: number;
++  imageUrl?: string | null;
++  displayOrder: number;
++}
++
++interface ApiMaterialDto {
++  id: number;
++  name: string;
++  description?: string | null;
++  productCount: number;
++}
++
++interface ApiBrandDto {
++  id: number;
++  name: string;
++  productCount: number;
++}
++
++interface ApiCatalogResponseDto {
++  products?: ApiProductDto[];
++  totalItems: number;
++  page: number;
++  pageSize: number;
++  totalPages: number;
++  materials?: ApiMaterialDto[];
++  brands?: ApiBrandDto[];
++}
++
++interface ApiProductFullDto extends ApiProductDto {
++  fullDescription?: string | null;
++  images?: string[] | null;
++  specifications?: Record<string, string> | null;
++  tags?: string[] | null;
++}
++
++interface ApiProductDetailsResponseDto {
++  product: ApiProductFullDto;
++  averageRating: number;
++  reviewCount: number;
++  relatedProducts?: ApiProductDto[];
++}
++
+ interface HomeResponseDto {
+   totalProducts: number;
+   averageRating: number;
+   totalOrders: number;
+   regionsCount: number;
++  newProducts?: ApiProductDto[];
+-  newProducts?: HomeProductDto[];
+   advantages?: HomeAdvantage[];
+   companyName?: string;
+   contactPhone?: string;
+@@ -39,98 +97,116 @@
+   readySketches: number;
+ }
+ 
++const sortValues: Record<NonNullable<CatalogFilters['sort']>, string> = {
++  popular: 'popularity',
++  'price-asc': 'price_asc',
++  'price-desc': 'price_desc',
++  newest: 'newest',
++  rating: 'rating',
++};
++
++function mapCategory(category: ApiCategoryDto): Category {
++  return {
++    id: String(category.id),
++    slug: category.slug,
++    name: category.name,
++    description: category.description ?? '',
++    productCount: category.productCount,
++    image: resolveApiAssetUrl(category.imageUrl),
++    accent: 'Категория КЕЛО',
++  };
++}
++
++async function fetchCategories(): Promise<Category[]> {
++  const response = await apiRequest<ApiCategoryDto[]>('/Catalog/categories');
++  return response.map(mapCategory);
++}
++
++function mapProduct(product: ApiProductDto, categories: Category[], details?: ApiProductFullDto): Product {
+-function mapHomeProduct(product: HomeProductDto): Product {
+   const badges: Product['badges'] = [];
+-  const imageUrl = resolveApiAssetUrl(product.mainImageUrl);
+-
+   if (product.isNew) badges.push('new');
+   if (product.isOnSale) badges.push('sale');
+ 
++  const category = categories.find((item) => item.name === product.categoryName);
++  const imageCandidates = [product.mainImageUrl, ...(details?.images ?? [])];
++  const images = imageCandidates
++    .map((image) => resolveApiAssetUrl(image))
++    .filter((image): image is string => Boolean(image))
++    .filter((image, index, values) => values.indexOf(image) === index);
++  const specifications = Object.entries(details?.specifications ?? {}).map(([label, value]) => ({ label, value }));
++  const getSpecification = (...fragments: string[]) =>
++    specifications.find((specification) => {
++      const label = specification.label.toLocaleLowerCase('ru-RU');
++      return fragments.some((fragment) => label.includes(fragment));
++    })?.value ?? '';
++
+   return {
+     id: String(product.id),
+     slug: product.slug,
++    sku: 'KELO-' + product.id,
+-    sku: `KELO-${product.id}`,
+     title: product.name,
++    shortDescription: product.shortDescription ?? '',
++    description: details?.fullDescription || product.shortDescription || '',
++    categoryId: product.categoryId ? String(product.categoryId) : category?.id ?? '',
++    categoryName: product.categoryName || category?.name || 'Каталог КЕЛО',
+-    shortDescription: product.shortDescription,
+-    description: product.shortDescription,
+-    categoryId: product.categoryId ? String(product.categoryId) : '',
+-    categoryName: product.categoryName || 'Каталог КЕЛО',
+     price: product.price,
+     oldPrice: product.oldPrice ?? undefined,
++    images,
++    material: product.materialName || 'Не указан',
++    finish: getSpecification('покрыт', 'отделк'),
++    dimensions: getSpecification('размер', 'габарит'),
++    weight: getSpecification('вес', 'масса'),
+-    images: imageUrl ? [imageUrl] : [],
+-    material: product.materialName || 'Дерево',
+-    finish: '',
+-    dimensions: '',
+-    weight: '',
+     availability: product.isInStock ? 'in-stock' : 'out-of-stock',
+     stock: product.stockQuantity,
+     badges,
+     rating: product.averageRating,
+     reviewCount: product.reviewCount,
++    specifications,
+-    specifications: [],
+   };
+ }
+ 
++function createCatalogParams(filters: CatalogFilters, materialId?: number): URLSearchParams {
++  const params = new URLSearchParams({
++    Page: '1',
++    PageSize: String(catalogPageSize),
++    SortBy: sortValues[filters.sort ?? 'popular'],
++  });
+-function filterMockProducts(filters: CatalogFilters = {}): Product[] {
+-  let result = [...products];
+ 
++  if (filters.query?.trim()) params.set('SearchTerm', filters.query.trim());
++  if (filters.category) params.set('CategoryId', filters.category);
++  if (materialId) params.set('MaterialId', String(materialId));
++  if (typeof filters.minPrice === 'number') params.set('MinPrice', String(filters.minPrice));
++  if (typeof filters.maxPrice === 'number') params.set('MaxPrice', String(filters.maxPrice));
++  if (filters.availability?.length === 1 && filters.availability[0] === 'in-stock') {
++    params.set('OnlyInStock', 'true');
+-  if (filters.query) {
+-    const query = filters.query.trim().toLocaleLowerCase('ru-RU');
+-    result = result.filter((product) =>
+-      [product.title, product.shortDescription, product.categoryName, product.material, product.sku]
+-        .join(' ')
+-        .toLocaleLowerCase('ru-RU')
+-        .includes(query),
+-    );
+   }
+ 
++  return params;
++}
+-  if (filters.category) {
+-    result = result.filter((product) => product.categoryId === filters.category);
+-  }
+ 
++function sortProducts(products: Product[], sort: CatalogFilters['sort']): Product[] {
++  const result = [...products];
+-  if (filters.materials?.length) {
+-    result = result.filter((product) => filters.materials?.includes(product.material));
+-  }
+ 
++  switch (sort) {
+-  if (filters.availability?.length) {
+-    result = result.filter((product) => filters.availability?.includes(product.availability));
+-  }
+-
+-  if (typeof filters.minPrice === 'number') {
+-    result = result.filter((product) => product.price >= filters.minPrice!);
+-  }
+-
+-  if (typeof filters.maxPrice === 'number') {
+-    result = result.filter((product) => product.price <= filters.maxPrice!);
+-  }
+-
+-  if (filters.badge) {
+-    result = result.filter((product) => product.badges.includes(filters.badge!));
+-  }
+-
+-  switch (filters.sort) {
+     case 'price-asc':
++      return result.sort((first, second) => first.price - second.price);
+-      result.sort((a, b) => a.price - b.price);
+-      break;
+     case 'price-desc':
++      return result.sort((first, second) => second.price - first.price);
++    case 'rating':
++      return result.sort((first, second) => second.rating - first.rating);
+-      result.sort((a, b) => b.price - a.price);
+-      break;
+     case 'newest':
++      return result.sort((first, second) => Number(second.id) - Number(first.id));
+-      result.sort((a, b) => Number(b.badges.includes('new')) - Number(a.badges.includes('new')));
+-      break;
+-    case 'rating':
+-      result.sort((a, b) => b.rating - a.rating);
+-      break;
+     default:
++      return result.sort((first, second) => second.reviewCount - first.reviewCount);
+-      result.sort((a, b) => b.reviewCount - a.reviewCount);
+   }
+-
+-  return result;
+ }
+ 
+ export const catalogService = {
+   async getHomeData(): Promise<HomeData> {
++    const [response, categoriesResponse] = await Promise.all([
++      apiRequest<HomeResponseDto>('/Home'),
++      fetchCategories(),
++    ]);
+-    const response = await apiRequest<HomeResponseDto>('/Home');
+ 
+     return {
+       totalProducts: response.totalProducts,
+@@ -137,7 +213,7 @@
+       averageRating: response.averageRating,
+       totalOrders: response.totalOrders,
+       regionsCount: response.regionsCount,
++      newProducts: (response.newProducts ?? []).map((product) => mapProduct(product, categoriesResponse)),
+-      newProducts: (response.newProducts ?? []).map(mapHomeProduct),
+       advantages: response.advantages ?? [],
+       companyName: response.companyName ?? 'КЕЛО — дерево с характером',
+       contactPhone: response.contactPhone ?? '',
+@@ -148,55 +224,87 @@
+   },
+ 
+   async getProducts(filters: CatalogFilters = {}): Promise<Product[]> {
++    const materialIds = (filters.materials ?? [])
++      .map(Number)
++      .filter((id) => Number.isInteger(id) && id > 0);
++    const params = createCatalogParams(filters, materialIds.length === 1 ? materialIds[0] : undefined);
++    const [response, categoriesResponse] = await Promise.all([
++      apiRequest<ApiCatalogResponseDto>('/Catalog/products?' + params.toString()),
++      fetchCategories(),
++    ]);
++
++    let result = (response.products ?? []).map((product) => mapProduct(product, categoriesResponse));
++
++    if (materialIds.length > 1) {
++      const materialNames = new Set(
++        (response.materials ?? [])
++          .filter((material) => materialIds.includes(material.id))
++          .map((material) => material.name),
++      );
++      result = result.filter((product) => materialNames.has(product.material));
++    }
++
++    if (filters.availability?.length) {
++      result = result.filter((product) => filters.availability?.includes(product.availability));
++    }
++
++    if (filters.badge) {
++      result = result.filter((product) => product.badges.includes(filters.badge!));
+-    if (!useMocks) {
+-      const params = new URLSearchParams();
+-      if (filters.query) params.set('query', filters.query);
+-      if (filters.category) params.set('category', filters.category);
+-      filters.materials?.forEach((material) => params.append('materials', material));
+-      filters.availability?.forEach((availability) => params.append('availability', availability));
+-      if (typeof filters.minPrice === 'number') params.set('minPrice', String(filters.minPrice));
+-      if (typeof filters.maxPrice === 'number') params.set('maxPrice', String(filters.maxPrice));
+-      if (filters.badge) params.set('badge', filters.badge);
+-      if (filters.sort) params.set('sort', filters.sort);
+-      const queryString = params.toString();
+-      return apiRequest<Product[]>(`/products${queryString ? `?${queryString}` : ''}`);
+     }
++
++    return sortProducts(result, filters.sort);
+-    await delay();
+-    return filterMockProducts(filters);
+   },
+ 
+   async getProductBySlug(slug: string): Promise<Product | undefined> {
++    const [response, categoriesResponse] = await Promise.all([
++      apiRequest<ApiProductDetailsResponseDto>('/Product/' + encodeURIComponent(slug)),
++      fetchCategories(),
++    ]);
++
++    return mapProduct(
++      {
++        ...response.product,
++        averageRating: response.averageRating,
++        reviewCount: response.reviewCount,
++      },
++      categoriesResponse,
++      response.product,
++    );
+-    if (!useMocks) return apiRequest<Product>(`/products/${slug}`);
+-    await delay();
+-    return products.find((product) => product.slug === slug);
+   },
+ 
+   async getCategories(): Promise<Category[]> {
++    return fetchCategories();
++  },
++
++  async getCatalogMaterials(): Promise<CatalogFilterOption[]> {
++    const response = await apiRequest<ApiCatalogResponseDto>('/Catalog/products?Page=1&PageSize=1');
++    return (response.materials ?? []).map((material) => ({
++      id: String(material.id),
++      name: material.name,
++      productCount: material.productCount,
++    }));
+-    if (!useMocks) return apiRequest<Category[]>('/categories');
+-    await delay(100);
+-    return categories;
+   },
+ 
+   async getPromotions(): Promise<Promotion[]> {
++    if (!useContentMocks) return apiRequest<Promotion[]>('/promotions');
+-    if (!useMocks) return apiRequest<Promotion[]>('/promotions');
+     await delay(100);
+     return promotions;
+   },
+ 
+   async getArticles(): Promise<Article[]> {
++    if (!useContentMocks) return apiRequest<Article[]>('/articles');
+-    if (!useMocks) return apiRequest<Article[]>('/articles');
+     await delay(100);
+     return articles;
+   },
+ 
+   async getArticleBySlug(slug: string): Promise<Article | undefined> {
++    if (!useContentMocks) return apiRequest<Article>('/articles/' + encodeURIComponent(slug));
+-    if (!useMocks) return apiRequest<Article>(`/articles/${slug}`);
+     await delay(100);
+     return articles.find((article) => article.slug === slug);
+   },
+ 
+   async getBrands(): Promise<Brand[]> {
++    if (!useContentMocks) return apiRequest<Brand[]>('/brands');
+-    if (!useMocks) return apiRequest<Brand[]>('/brands');
+     await delay(100);
+     return brands;
+   },
+diff --git a/src/hooks/useCatalog.ts b/src/hooks/useCatalog.ts
+--- a/src/hooks/useCatalog.ts
++++ b/src/hooks/useCatalog.ts
+@@ -21,6 +21,9 @@
+ export const useCategories = () =>
+   useQuery({ queryKey: ['categories'], queryFn: () => catalogService.getCategories() });
+ 
++export const useCatalogMaterials = () =>
++  useQuery({ queryKey: ['catalog-materials'], queryFn: () => catalogService.getCatalogMaterials() });
++
+ export const usePromotions = () =>
+   useQuery({ queryKey: ['promotions'], queryFn: () => catalogService.getPromotions() });
+ 
+diff --git a/src/components/catalog/FiltersSidebar.tsx b/src/components/catalog/FiltersSidebar.tsx
+--- a/src/components/catalog/FiltersSidebar.tsx
++++ b/src/components/catalog/FiltersSidebar.tsx
+@@ -1,9 +1,9 @@
++import type { Availability, CatalogFilterOption } from '@/types/catalog';
+-import type { Availability } from '@/types/catalog';
+ 
+ export interface FilterState {
+   minPrice: string;
+   maxPrice: string;
++  materials: CatalogFilterOption[];
+-  materials: string[];
+   availability: Availability[];
+ }
+ 
+@@ -16,17 +16,16 @@
+ 
+ const availabilityOptions: Array<{ value: Availability; label: string }> = [
+   { value: 'in-stock', label: 'В наличии' },
+-  { value: 'made-to-order', label: 'На заказ' },
+   { value: 'out-of-stock', label: 'Нет в наличии' },
+ ];
+ 
+ export function FiltersSidebar({ value, materials, onChange, onReset }: FiltersSidebarProps) {
++  const toggleMaterial = (materialId: string) => {
+-  const toggleMaterial = (material: string) => {
+     onChange({
+       ...value,
++      materials: value.materials.includes(materialId)
++        ? value.materials.filter((item) => item !== materialId)
++        : [...value.materials, materialId],
+-      materials: value.materials.includes(material)
+-        ? value.materials.filter((item) => item !== material)
+-        : [...value.materials, material],
+     });
+   };
+ 
+@@ -73,13 +72,13 @@
+       <div className="filter-group">
+         <h3>Материал</h3>
+         {materials.map((material) => (
++          <label className="check-row" key={material.id}>
+-          <label className="check-row" key={material}>
+             <input
+               type="checkbox"
++              checked={value.materials.includes(material.id)}
++              onChange={() => toggleMaterial(material.id)}
+-              checked={value.materials.includes(material)}
+-              onChange={() => toggleMaterial(material)}
+             />
++            <span>{material.name}</span>
+-            <span>{material}</span>
+           </label>
+         ))}
+       </div>
+diff --git a/src/pages/CatalogPage.tsx b/src/pages/CatalogPage.tsx
+--- a/src/pages/CatalogPage.tsx
++++ b/src/pages/CatalogPage.tsx
+@@ -7,7 +7,7 @@
+ import { Container } from '@/components/ui/Container';
+ import { EmptyState } from '@/components/ui/EmptyState';
+ import { LoadingGrid } from '@/components/ui/LoadingGrid';
++import { useCatalogMaterials, useCategories, useProducts } from '@/hooks/useCatalog';
+-import { useCategories, useProducts } from '@/hooks/useCatalog';
+ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+ import type { CatalogFilters } from '@/types/catalog';
+ 
+@@ -27,6 +27,7 @@
+   const query = searchParams.get('q') ?? '';
+   const sort = (searchParams.get('sort') as CatalogFilters['sort']) ?? 'popular';
+   const categoriesQuery = useCategories();
++  const materialsQuery = useCatalogMaterials();
+ 
+   const requestFilters: CatalogFilters = useMemo(() => ({
+     query,
+@@ -39,7 +40,7 @@
+   }), [query, categoryId, filters, sort]);
+ 
+   const productsQuery = useProducts(requestFilters);
++  const materials = materialsQuery.data ?? [];
+-  const materials = useMemo(() => ['Бук', 'Дуб', 'Ясень', 'Массив дерева'], []);
+   const activeCategory = categoriesQuery.data?.find((category) => category.id === categoryId);
+ 
+   useEffect(() => {
+@@ -103,6 +104,13 @@
+         <div>
+           {productsQuery.isLoading ? (
+             <LoadingGrid count={9} />
++          ) : productsQuery.isError ? (
++            <EmptyState
++              icon={<SlidersHorizontal />}
++              title="Не удалось загрузить каталог"
++              description={productsQuery.error instanceof Error ? productsQuery.error.message : 'Проверьте доступность backend и повторите запрос.'}
++              action={<button className="button button--primary" type="button" onClick={() => void productsQuery.refetch()}>Повторить</button>}
++            />
+           ) : productsQuery.data?.length ? (
+             <ProductGrid products={productsQuery.data} />
+           ) : (
+diff --git a/src/types/catalog.ts b/src/types/catalog.ts
+--- a/src/types/catalog.ts
++++ b/src/types/catalog.ts
+@@ -11,6 +11,12 @@
+   accent: string;
+ }
+ 
++export interface CatalogFilterOption {
++  id: string;
++  name: string;
++  productCount: number;
++}
++
+ export interface ProductSpecification {
+   label: string;
+   value: string;
