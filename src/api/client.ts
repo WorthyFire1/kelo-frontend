@@ -41,8 +41,19 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
   if (!response.ok) {
     let message = responseText;
     try {
-      const parsed = JSON.parse(responseText) as { message?: string; error?: string };
-      message = parsed.message ?? parsed.error ?? responseText;
+      const parsed = JSON.parse(responseText) as {
+        message?: string;
+        error?: string;
+        title?: string;
+        errors?: Record<string, string[]>;
+      };
+      const validationMessages = Object.values(parsed.errors ?? {}).flat();
+      message =
+        parsed.message ??
+        parsed.error ??
+        (validationMessages.length ? validationMessages.join(' ') : undefined) ??
+        parsed.title ??
+        responseText;
     } catch {
       // Сервер может вернуть обычный текст вместо JSON.
     }

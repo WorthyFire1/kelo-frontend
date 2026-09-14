@@ -26,11 +26,12 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { AdminBlogSection, AdminBrandsSection, AdminCategoriesSection, AdminOrdersSection } from '@/components/admin/AdminResourceSections';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { adminService, type AdminProduct, type AdminProductDetails } from '@/services/adminService';
 import { useAuthStore } from '@/store/useAuthStore';
 
-type AdminSection = 'overview' | 'products' | 'orders' | 'users' | 'discounts' | 'blog' | 'custom-orders';
+type AdminSection = 'overview' | 'products' | 'categories' | 'brands' | 'orders' | 'users' | 'discounts' | 'blog' | 'custom-orders';
 
 interface AdminNavItem {
   id: AdminSection;
@@ -41,6 +42,8 @@ interface AdminNavItem {
 const navigation: AdminNavItem[] = [
   { id: 'overview', label: 'Обзор', icon: LayoutDashboard },
   { id: 'products', label: 'Товары', icon: Boxes },
+  { id: 'categories', label: 'Категории', icon: Store },
+  { id: 'brands', label: 'Бренды', icon: PackageCheck },
   { id: 'orders', label: 'Заказы', icon: ShoppingBag },
   { id: 'users', label: 'Пользователи', icon: UsersRound },
   { id: 'discounts', label: 'Скидки', icon: Percent },
@@ -51,6 +54,8 @@ const navigation: AdminNavItem[] = [
 const sectionNames: Record<AdminSection, string> = {
   overview: 'Обзор магазина',
   products: 'Товары',
+  categories: 'Категории',
+  brands: 'Бренды',
   orders: 'Заказы',
   users: 'Пользователи',
   discounts: 'Скидки и промокоды',
@@ -60,14 +65,6 @@ const sectionNames: Record<AdminSection, string> = {
 
 const moneyFormatter = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 });
 const dateFormatter = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' });
-const orderStatuses = [
-  { value: 'New', label: 'Новый' },
-  { value: 'Processing', label: 'В обработке' },
-  { value: 'Shipped', label: 'Отправлен' },
-  { value: 'Delivered', label: 'Доставлен' },
-  { value: 'Cancelled', label: 'Отменён' },
-];
-
 function formatMoney(value: number) {
   return moneyFormatter.format(value);
 }
@@ -153,14 +150,11 @@ export function AdminPage() {
   const [productSearch, setProductSearch] = useState('');
   const [productFormOpen, setProductFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<AdminProductDetails | null>(null);
-  const [orderStatus, setOrderStatus] = useState('');
 
   const dashboardQuery = useQuery({ queryKey: ['admin', 'stats'], queryFn: adminService.getStats, enabled: section === 'overview' });
   const productsQuery = useQuery({ queryKey: ['admin', 'products'], queryFn: adminService.getProducts, enabled: section === 'overview' || section === 'products' });
-  const ordersQuery = useQuery({ queryKey: ['admin', 'orders', orderStatus], queryFn: () => adminService.getOrders(orderStatus), enabled: section === 'orders' });
   const usersQuery = useQuery({ queryKey: ['admin', 'users'], queryFn: adminService.getUsers, enabled: section === 'users' });
   const discountsQuery = useQuery({ queryKey: ['admin', 'discounts'], queryFn: adminService.getDiscounts, enabled: section === 'discounts' });
-  const blogQuery = useQuery({ queryKey: ['admin', 'blog'], queryFn: adminService.getBlogPosts, enabled: section === 'blog' });
   const productOptionsQuery = useQuery({ queryKey: ['admin', 'product-options'], queryFn: adminService.getProductOptions, enabled: productFormOpen });
 
   const createProductMutation = useMutation({
@@ -200,11 +194,6 @@ export function AdminPage() {
       ]);
     },
   });
-  const updateOrderMutation = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: string }) => adminService.updateOrderStatus(id, status),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'orders'] }),
-  });
-
   const filteredProducts = useMemo(() => {
     const products = productsQuery.data?.products ?? [];
     const query = productSearch.trim().toLocaleLowerCase('ru-RU');
@@ -278,7 +267,7 @@ export function AdminPage() {
     };
 
     if (editingProduct) {
-      updateProductMutation.mutate({ ...product, id: editingProduct.id, mainImageUrl: editingProduct.mainImageUrl, slug: editingProduct.slug });
+      updateProductMutation.mutate({ ...product, id: editingProduct.id, mainImageUrl: editingProduct.sourceMainImageUrl, slug: editingProduct.slug });
       return;
     }
 
@@ -335,7 +324,7 @@ export function AdminPage() {
                   </section>
                   <section className="admin-backend-grid">
                     <article><span className="is-online" /><div><strong>Backend доступен</strong><small>Статистика получена из <code>GET /api/admin/stats</code></small></div></article>
-                    <article><ShieldCheck /><div><strong>Роль подтверждена</strong><small>Доступ открыт по роли Admin из JWT</small></div></article>
+                    <article><ShieldCheck /><div><strong>Клиентская проверка роли</strong><small>Backend должен вернуть [Authorize(Roles = "Admin")] на AdminController</small></div></article>
                     <article><Store /><div><strong>{dashboardQuery.data.totalCategories} категорий</strong><small>Актуальная структура каталога КЕЛО</small></div></article>
                   </section>
                 </>
@@ -354,17 +343,8 @@ export function AdminPage() {
             </section>
           )}
 
-          {section === 'orders' && (
-            <section className="admin-panel-card">
-              <div className="admin-section-heading"><div><span className="admin-kicker">Продажи</span><h2>Все заказы</h2><p>{ordersQuery.data ? `${ordersQuery.data.total} заказов в backend` : 'Очередь заказов магазина'}</p></div><label className="admin-status-filter"><span>Статус</span><select value={orderStatus} onChange={(event) => setOrderStatus(event.target.value)}><option value="">Все</option>{orderStatuses.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></label></div>
-              <QueryState isPending={ordersQuery.isPending} isError={ordersQuery.isError} onRetry={() => void ordersQuery.refetch()} />
-              {ordersQuery.data && <div className="admin-table-scroll"><table className="admin-table"><thead><tr><th>Заказ</th><th>Покупатель</th><th>Дата</th><th>Сумма</th><th>Позиций</th><th>Статус</th></tr></thead><tbody>
-                {ordersQuery.data.orders.map((order) => <tr key={order.id}><td><strong>{order.orderNumber}</strong></td><td>{order.customerName}</td><td>{formatDate(order.orderDate)}</td><td><strong>{formatMoney(order.total)}</strong></td><td>{order.itemsCount}</td><td><select className="admin-order-status" value={order.status} disabled={updateOrderMutation.isPending && updateOrderMutation.variables?.id === order.id} onChange={(event) => updateOrderMutation.mutate({ id: order.id, status: event.target.value })}>{orderStatuses.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></td></tr>)}
-                {!ordersQuery.data.orders.length && <tr><td className="admin-table-empty" colSpan={6}>Заказов с выбранным статусом нет.</td></tr>}
-              </tbody></table></div>}
-              {updateOrderMutation.isError && <div className="admin-mutation-error">Статус не сохранён. Повторите попытку.</div>}
-            </section>
-          )}
+          {section === 'orders' && <AdminOrdersSection />}
+
           {section === 'users' && (
             <section className="admin-panel-card">
               <div className="admin-section-heading"><div><span className="admin-kicker">Аудитория</span><h2>Пользователи</h2><p>{usersQuery.data ? `${usersQuery.data.total} зарегистрированных пользователей` : 'Покупатели магазина'}</p></div></div>
@@ -375,6 +355,9 @@ export function AdminPage() {
               </tbody></table></div>}
             </section>
           )}
+          {section === 'categories' && <AdminCategoriesSection />}
+          {section === 'brands' && <AdminBrandsSection />}
+
           {section === 'custom-orders' && <UnavailableSection icon={FilePenLine} title="Заявки на индивидуальные изделия" description="GET /api/customorder выдаёт только заявки авторизованного пользователя. Для общей очереди производства нужен отдельный защищённый контракт." endpoints={['GET /api/admin/custom-orders', 'GET /api/admin/custom-orders/{id}', 'PUT /api/admin/custom-orders/{id}/status']} />}
 
           {section === 'discounts' && (
@@ -391,19 +374,7 @@ export function AdminPage() {
             </section>
           )}
 
-          {section === 'blog' && (
-            <section className="admin-panel-card">
-              <div className="admin-section-heading"><div><span className="admin-kicker">Контент</span><h2>Публикации</h2><p>{blogQuery.data ? `${blogQuery.data.totalPosts} опубликованных материалов` : 'Статьи из актуального backend'}</p></div><button type="button" disabled>Новая статья</button></div>
-              <IntegrationNote />
-              <QueryState isPending={blogQuery.isPending} isError={blogQuery.isError} onRetry={() => void blogQuery.refetch()} />
-              {blogQuery.data && (
-                <div className="admin-table-scroll"><table className="admin-table"><thead><tr><th>Публикация</th><th>Категория</th><th>Автор</th><th>Дата</th><th>Чтение</th></tr></thead><tbody>
-                  {blogQuery.data.posts.map((post) => <tr key={post.id}><td><div className="admin-post-cell"><span><BookOpen size={18} /></span><div><strong>{post.title}</strong><small>/{post.slug}</small></div></div></td><td>{post.category || 'Без категории'}</td><td>{post.authorName || 'КЕЛО'}</td><td>{formatDate(post.publishedAt)}</td><td>{post.readTimeMinutes} мин.</td></tr>)}
-                  {!blogQuery.data.posts.length && <tr><td className="admin-table-empty" colSpan={5}>Опубликованных статей пока нет.</td></tr>}
-                </tbody></table></div>
-              )}
-            </section>
-          )}
+          {section === 'blog' && <AdminBlogSection />}
         </div>
       </main>
 
@@ -425,8 +396,8 @@ export function AdminPage() {
                 <label><span>Бренд</span><select name="brandId" required defaultValue={editingProduct?.brandId ?? ''}><option value="">Выберите бренд</option>{productOptionsQuery.data?.brands.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
                 <label><span>Материал</span><select name="materialId" required defaultValue={editingProduct?.materialId ?? ''}><option value="">Выберите материал</option>{productOptionsQuery.data?.materials.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
                 <label className="admin-form-wide"><span>{editingProduct?.mainImageUrl ? 'Новое изображение (заменит текущее)' : 'Изображение товара'}</span><input name="imageFile" type="file" accept=".jpg,.jpeg,.png,.gif,.webp,image/jpeg,image/png,image/gif,image/webp" /><small>JPG, PNG, GIF или WebP, не более 5 МБ.</small></label>
-                <label className="admin-form-wide"><span>Краткое описание</span><textarea name="shortDescription" maxLength={1000} rows={3} defaultValue={editingProduct?.shortDescription ?? ''} /></label>
-                <label className="admin-form-wide"><span>Полное описание</span><textarea name="fullDescription" rows={5} defaultValue={editingProduct?.fullDescription ?? ''} /></label>
+                <label className="admin-form-wide"><span>Краткое описание</span><textarea name="shortDescription" required maxLength={1000} rows={3} defaultValue={editingProduct?.shortDescription ?? ''} /></label>
+                <label className="admin-form-wide"><span>Полное описание</span><textarea name="fullDescription" required rows={5} defaultValue={editingProduct?.fullDescription ?? ''} /></label>
               </div>
               <div className="admin-check-grid">
                 <label><input name="isActive" type="checkbox" defaultChecked={editingProduct?.isActive ?? true} /> Активен</label>
