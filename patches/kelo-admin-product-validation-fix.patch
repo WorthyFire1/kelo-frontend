@@ -1,0 +1,45 @@
+diff --git a/src/api/client.ts b/src/api/client.ts
+--- a/src/api/client.ts
++++ b/src/api/client.ts
+@@ -39,12 +39,23 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
+   const responseText = await response.text();
+ 
+   if (!response.ok) {
+     let message = responseText;
+     try {
+-      const parsed = JSON.parse(responseText) as { message?: string; error?: string };
+-      message = parsed.message ?? parsed.error ?? responseText;
++      const parsed = JSON.parse(responseText) as {
++        message?: string;
++        error?: string;
++        title?: string;
++        errors?: Record<string, string[]>;
++      };
++      const validationMessages = Object.values(parsed.errors ?? {}).flat();
++      message =
++        parsed.message ??
++        parsed.error ??
++        (validationMessages.length ? validationMessages.join(' ') : undefined) ??
++        parsed.title ??
++        responseText;
+     } catch {
+       // Сервер может вернуть обычный текст вместо JSON.
+     }
+     throw new ApiError(message || 'Ошибка запроса', response.status);
+   }
+diff --git a/src/pages/AdminPage.tsx b/src/pages/AdminPage.tsx
+--- a/src/pages/AdminPage.tsx
++++ b/src/pages/AdminPage.tsx
+@@ -395,10 +395,10 @@ export function AdminPage() {
+                 <label><span>Категория</span><select name="categoryId" required defaultValue={editingProduct?.categoryId ?? ''}><option value="">Выберите категорию</option>{productOptionsQuery.data?.categories.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
+                 <label><span>Бренд</span><select name="brandId" required defaultValue={editingProduct?.brandId ?? ''}><option value="">Выберите бренд</option>{productOptionsQuery.data?.brands.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
+                 <label><span>Материал</span><select name="materialId" required defaultValue={editingProduct?.materialId ?? ''}><option value="">Выберите материал</option>{productOptionsQuery.data?.materials.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
+                 <label className="admin-form-wide"><span>{editingProduct?.mainImageUrl ? 'Новое изображение (заменит текущее)' : 'Изображение товара'}</span><input name="imageFile" type="file" accept=".jpg,.jpeg,.png,.gif,.webp,image/jpeg,image/png,image/gif,image/webp" /><small>JPG, PNG, GIF или WebP, не более 5 МБ.</small></label>
+-                <label className="admin-form-wide"><span>Краткое описание</span><textarea name="shortDescription" maxLength={1000} rows={3} defaultValue={editingProduct?.shortDescription ?? ''} /></label>
+-                <label className="admin-form-wide"><span>Полное описание</span><textarea name="fullDescription" rows={5} defaultValue={editingProduct?.fullDescription ?? ''} /></label>
++                <label className="admin-form-wide"><span>Краткое описание</span><textarea name="shortDescription" required maxLength={1000} rows={3} defaultValue={editingProduct?.shortDescription ?? ''} /></label>
++                <label className="admin-form-wide"><span>Полное описание</span><textarea name="fullDescription" required rows={5} defaultValue={editingProduct?.fullDescription ?? ''} /></label>
+               </div>
+               <div className="admin-check-grid">
+                 <label><input name="isActive" type="checkbox" defaultChecked={editingProduct?.isActive ?? true} /> Активен</label>
+                 <label><input name="isNew" type="checkbox" defaultChecked={editingProduct?.isNew ?? false} /> Новинка</label>
