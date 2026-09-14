@@ -1,0 +1,913 @@
+diff --git a/src/services/adminService.ts b/src/services/adminService.ts
+--- a/src/services/adminService.ts
++++ b/src/services/adminService.ts
+@@ -1,9 +1,9 @@
++import { apiRequest, resolveApiAssetUrl } from '@/api/client';
+-import { apiRequest } from '@/api/client';
+ 
+ export interface AdminProduct {
+   id: number;
+   name: string;
++  shortDescription?: string | null;
+-  shortDescription?: string;
+   price: number;
+   oldPrice?: number | null;
+   mainImageUrl?: string | null;
+@@ -48,6 +48,43 @@
+   itemsCount: number;
+ }
+ 
++export interface AdminOrderItem {
++  id: number;
++  productId: number;
++  quantity: number;
++  unitPrice: number;
++  totalPrice: number;
++  productName: string;
++  productSku: string | null;
++}
++
++export interface AdminOrderDetails {
++  id: number;
++  orderNumber: string;
++  orderDate: string;
++  updatedAt: string | null;
++  status: string;
++  subtotal: number;
++  shippingCost: number;
++  discountAmount: number;
++  total: number;
++  paymentMethod: string;
++  paymentStatus: string;
++  shippingMethod: string;
++  shippingAddress: string;
++  comment: string | null;
++  shippedAt: string | null;
++  deliveredAt: string | null;
++  orderItems: AdminOrderItem[];
++  user?: {
++    id: number;
++    firstName: string;
++    lastName: string;
++    email: string;
++    phoneNumber: string | null;
++  } | null;
++}
++
+ export interface AdminOrdersData {
+   orders: AdminOrder[];
+   total: number;
+@@ -111,6 +148,7 @@
+   isNew: boolean;
+   isActive: boolean;
+   mainImageUrl: string | null;
++  sourceMainImageUrl: string | null;
+   slug: string;
+   categoryId: number | null;
+   brandId: number | null;
+@@ -128,8 +166,49 @@
+   materials: AdminProductOption[];
+ }
+ 
++export interface AdminCategory {
++  id: number;
++  name: string;
++  description: string | null;
++  slug: string;
++  productCount: number;
++  imageUrl: string | null;
++  displayOrder: number;
++}
++
++export interface AdminCategoryInput {
++  name: string;
++  description: string;
++  parentCategoryId: number | null;
++  displayOrder: number;
++}
++
++export interface AdminBrand {
++  id: number;
++  name: string;
++  description: string | null;
++  slug: string;
++  logoUrl: string | null;
++  sourceLogoUrl: string | null;
++  productCount: number;
++  isActive: boolean;
++}
++
++export interface AdminBrandsData {
++  brands: AdminBrand[];
++  total: number;
++  page: number;
++  pageSize: number;
++  totalPages: number;
++}
++
++export interface AdminBrandInput {
++  name: string;
++  description: string;
++  isActive: boolean;
++  logo: File | null;
++  logoUrl: string | null;
++  removeLogo: boolean;
+-interface AdminBrandsData {
+-  brands: AdminProductOption[];
+ }
+ 
+ interface CatalogOptionsData {
+@@ -152,15 +231,31 @@
+ export interface AdminBlogPost {
+   id: number;
+   title: string;
++  shortDescription: string | null;
++  content: string;
+-  shortDescription: string;
+   slug: string;
+   category: string | null;
+   featuredImageUrl: string | null;
+   readTimeMinutes: number;
+   publishedAt: string;
++  updatedAt: string | null;
++  isPublished: boolean;
+   authorName: string | null;
++  tags: string[];
+ }
+ 
++export interface AdminBlogPostInput {
++  title: string;
++  shortDescription: string;
++  content: string;
++  category: string;
++  readTimeMinutes: number;
++  isPublished: boolean;
++  tags: string[];
++  featuredImage: File | null;
++  removeFeaturedImage: boolean;
++}
++
+ export interface BlogAdminData {
+   posts: AdminBlogPost[];
+   totalPosts: number;
+@@ -170,6 +265,34 @@
+   categories: string[];
+ }
+ 
++function normalizeProduct(product: AdminProduct): AdminProduct {
++  return { ...product, mainImageUrl: resolveApiAssetUrl(product.mainImageUrl) ?? null };
++}
++
++function normalizeProductDetails(product: Omit<AdminProductDetails, 'sourceMainImageUrl'>): AdminProductDetails {
++  return {
++    ...product,
++    sourceMainImageUrl: product.mainImageUrl,
++    mainImageUrl: resolveApiAssetUrl(product.mainImageUrl) ?? null,
++  };
++}
++
++function normalizeBrand(brand: Omit<AdminBrand, 'sourceLogoUrl'>): AdminBrand {
++  return {
++    ...brand,
++    sourceLogoUrl: brand.logoUrl,
++    logoUrl: resolveApiAssetUrl(brand.logoUrl) ?? null,
++  };
++}
++
++function normalizeBlogPost(post: AdminBlogPost): AdminBlogPost {
++  return {
++    ...post,
++    featuredImageUrl: resolveApiAssetUrl(post.featuredImageUrl) ?? null,
++    tags: post.tags ?? [],
++  };
++}
++
+ function createProductFormData(product: AdminProductInput): FormData {
+   const formData = new FormData();
+   formData.append('Name', product.name);
+@@ -190,27 +313,58 @@
+   return formData;
+ }
+ 
++function createBrandFormData(brand: AdminBrandInput): FormData {
++  const formData = new FormData();
++  formData.append('Name', brand.name);
++  formData.append('Description', brand.description);
++  formData.append('IsActive', String(brand.isActive));
++  if (brand.logo) formData.append('Logo', brand.logo);
++  if (brand.logoUrl) formData.append('LogoUrl', brand.logoUrl);
++  formData.append('RemoveLogo', String(brand.removeLogo));
++  return formData;
++}
++
++function createBlogFormData(post: AdminBlogPostInput): FormData {
++  const formData = new FormData();
++  formData.append('Title', post.title);
++  formData.append('ShortDescription', post.shortDescription);
++  formData.append('Content', post.content);
++  formData.append('Category', post.category);
++  formData.append('ReadTimeMinutes', String(post.readTimeMinutes));
++  formData.append('IsPublished', String(post.isPublished));
++  post.tags.forEach((tag) => formData.append('Tags', tag));
++  if (post.featuredImage) formData.append('FeaturedImage', post.featuredImage);
++  formData.append('RemoveFeaturedImage', String(post.removeFeaturedImage));
++  return formData;
++}
++
+ export const adminService = {
+   getStats(): Promise<AdminStats> {
+     return apiRequest<AdminStats>('/admin/stats');
+   },
+ 
++  async getProducts(): Promise<CatalogAdminData> {
++    const data = await apiRequest<CatalogAdminData>('/admin/products?page=1&pageSize=100');
++    return { ...data, products: data.products.map(normalizeProduct) };
+-  getProducts(): Promise<CatalogAdminData> {
+-    return apiRequest<CatalogAdminData>('/admin/products?page=1&pageSize=100');
+   },
+ 
++  async getProduct(id: number): Promise<AdminProductDetails> {
++    const product = await apiRequest<Omit<AdminProductDetails, 'sourceMainImageUrl'>>(`/admin/products/${id}`);
++    return normalizeProductDetails(product);
+-  getProduct(id: number): Promise<AdminProductDetails> {
+-    return apiRequest<AdminProductDetails>(`/admin/products/${id}`);
+   },
+ 
+   async getProductOptions(): Promise<AdminProductOptions> {
+     const [categories, brandsData, catalogData] = await Promise.all([
++      apiRequest<AdminCategory[]>('/admin/categories'),
++      apiRequest<{ brands: Array<Omit<AdminBrand, 'sourceLogoUrl'>> }>('/admin/brands?page=1&pageSize=100'),
++      apiRequest<CatalogOptionsData>('/Catalog/products?Page=1&PageSize=1'),
+-      apiRequest<AdminProductOption[]>('/admin/categories'),
+-      apiRequest<AdminBrandsData>('/admin/brands?page=1&pageSize=100'),
+-      apiRequest<CatalogOptionsData>('/catalog/products?page=1&pageSize=1'),
+     ]);
+ 
++    return {
++      categories: categories.map(({ id, name }) => ({ id, name })),
++      brands: brandsData.brands.map(({ id, name }) => ({ id, name })),
++      materials: catalogData.materials,
++    };
+-    return { categories, brands: brandsData.brands, materials: catalogData.materials };
+   },
+ 
+   async createProduct(product: AdminProductInput): Promise<void> {
+@@ -236,6 +390,10 @@
+     return apiRequest<AdminOrdersData>(`/admin/orders?${params.toString()}`);
+   },
+ 
++  getOrder(id: number): Promise<AdminOrderDetails> {
++    return apiRequest<AdminOrderDetails>(`/admin/orders/${id}`);
++  },
++
+   updateOrderStatus(id: number, status: string): Promise<{ message: string }> {
+     return apiRequest(`/admin/orders/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) });
+   },
+@@ -244,11 +402,80 @@
+     return apiRequest<AdminUsersData>('/admin/users?page=1&pageSize=100');
+   },
+ 
++  getCategories(): Promise<AdminCategory[]> {
++    return apiRequest<AdminCategory[]>('/admin/categories');
++  },
++
++  getCategory(id: number): Promise<AdminCategory> {
++    return apiRequest<AdminCategory>(`/admin/categories/${id}`);
++  },
++
++  createCategory(category: AdminCategoryInput): Promise<AdminCategory> {
++    return apiRequest<AdminCategory>('/admin/categories', { method: 'POST', body: JSON.stringify(category) });
++  },
++
++  updateCategory(id: number, category: AdminCategoryInput): Promise<AdminCategory> {
++    return apiRequest<AdminCategory>(`/admin/categories/${id}`, {
++      method: 'PUT',
++      body: JSON.stringify({ ...category, id }),
++    });
++  },
++
++  deleteCategory(id: number): Promise<{ message: string }> {
++    return apiRequest(`/admin/categories/${id}`, { method: 'DELETE' });
++  },
++
++  async getBrands(): Promise<AdminBrandsData> {
++    const data = await apiRequest<Omit<AdminBrandsData, 'brands'> & { brands: Array<Omit<AdminBrand, 'sourceLogoUrl'>> }>('/admin/brands?page=1&pageSize=100');
++    return { ...data, brands: data.brands.map(normalizeBrand) };
++  },
++
++  async getBrand(id: number): Promise<AdminBrand> {
++    const brand = await apiRequest<Omit<AdminBrand, 'sourceLogoUrl'>>(`/admin/brand/${id}`);
++    return normalizeBrand(brand);
++  },
++
++  async createBrand(brand: AdminBrandInput): Promise<void> {
++    await apiRequest('/admin/create-brand', { method: 'POST', body: createBrandFormData(brand) });
++  },
++
++  async updateBrand(id: number, brand: AdminBrandInput): Promise<void> {
++    const formData = createBrandFormData(brand);
++    formData.append('Id', String(id));
++    await apiRequest('/admin/update-brand', { method: 'PUT', body: formData });
++  },
++
++  deleteBrand(id: number): Promise<{ message: string }> {
++    return apiRequest(`/admin/delete-brand/${id}`, { method: 'DELETE' });
++  },
++
+   getDiscounts(): Promise<AdminDiscount[]> {
++    return apiRequest<AdminDiscount[]>('/Discount');
++  },
++
++  async getBlogPosts(): Promise<BlogAdminData> {
++    const [data, categories] = await Promise.all([
++      apiRequest<Omit<BlogAdminData, 'categories'>>('/admin/BlogPostsList?page=1&pageSize=100'),
++      apiRequest<string[]>('/admin/blog-categories'),
++    ]);
++    return { ...data, categories, posts: data.posts.map(normalizeBlogPost) };
++  },
++
++  async getBlogPost(id: number): Promise<AdminBlogPost> {
++    return normalizeBlogPost(await apiRequest<AdminBlogPost>(`/admin/GetBlogPost/${id}`));
++  },
++
++  async createBlogPost(post: AdminBlogPostInput): Promise<void> {
++    await apiRequest('/admin/CreateBlogPost', { method: 'POST', body: createBlogFormData(post) });
++  },
++
++  async updateBlogPost(id: number, post: AdminBlogPostInput): Promise<void> {
++    const formData = createBlogFormData(post);
++    formData.append('Id', String(id));
++    await apiRequest(`/admin/UpdateBlogPost/${id}`, { method: 'PUT', body: formData });
+-    return apiRequest<AdminDiscount[]>('/discount');
+   },
+ 
++  deleteBlogPost(id: number): Promise<{ message: string }> {
++    return apiRequest(`/admin/DeleteBlogPost/${id}`, { method: 'DELETE' });
+-  getBlogPosts(): Promise<BlogAdminData> {
+-    return apiRequest<BlogAdminData>('/blog?page=1&pageSize=100');
+   },
+ };
+diff --git a/src/pages/AdminPage.tsx b/src/pages/AdminPage.tsx
+--- a/src/pages/AdminPage.tsx
++++ b/src/pages/AdminPage.tsx
+@@ -26,11 +26,12 @@
+ } from 'lucide-react';
+ import type { LucideIcon } from 'lucide-react';
+ import { Link, useNavigate } from 'react-router-dom';
++import { AdminBlogSection, AdminBrandsSection, AdminCategoriesSection, AdminOrdersSection } from '@/components/admin/AdminResourceSections';
+ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+ import { adminService, type AdminProduct, type AdminProductDetails } from '@/services/adminService';
+ import { useAuthStore } from '@/store/useAuthStore';
+ 
++type AdminSection = 'overview' | 'products' | 'categories' | 'brands' | 'orders' | 'users' | 'discounts' | 'blog' | 'custom-orders';
+-type AdminSection = 'overview' | 'products' | 'orders' | 'users' | 'discounts' | 'blog' | 'custom-orders';
+ 
+ interface AdminNavItem {
+   id: AdminSection;
+@@ -41,6 +42,8 @@
+ const navigation: AdminNavItem[] = [
+   { id: 'overview', label: 'Обзор', icon: LayoutDashboard },
+   { id: 'products', label: 'Товары', icon: Boxes },
++  { id: 'categories', label: 'Категории', icon: Store },
++  { id: 'brands', label: 'Бренды', icon: PackageCheck },
+   { id: 'orders', label: 'Заказы', icon: ShoppingBag },
+   { id: 'users', label: 'Пользователи', icon: UsersRound },
+   { id: 'discounts', label: 'Скидки', icon: Percent },
+@@ -51,6 +54,8 @@
+ const sectionNames: Record<AdminSection, string> = {
+   overview: 'Обзор магазина',
+   products: 'Товары',
++  categories: 'Категории',
++  brands: 'Бренды',
+   orders: 'Заказы',
+   users: 'Пользователи',
+   discounts: 'Скидки и промокоды',
+@@ -60,14 +65,6 @@
+ 
+ const moneyFormatter = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 });
+ const dateFormatter = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' });
+-const orderStatuses = [
+-  { value: 'New', label: 'Новый' },
+-  { value: 'Processing', label: 'В обработке' },
+-  { value: 'Shipped', label: 'Отправлен' },
+-  { value: 'Delivered', label: 'Доставлен' },
+-  { value: 'Cancelled', label: 'Отменён' },
+-];
+-
+ function formatMoney(value: number) {
+   return moneyFormatter.format(value);
+ }
+@@ -153,14 +150,11 @@
+   const [productSearch, setProductSearch] = useState('');
+   const [productFormOpen, setProductFormOpen] = useState(false);
+   const [editingProduct, setEditingProduct] = useState<AdminProductDetails | null>(null);
+-  const [orderStatus, setOrderStatus] = useState('');
+ 
+   const dashboardQuery = useQuery({ queryKey: ['admin', 'stats'], queryFn: adminService.getStats, enabled: section === 'overview' });
+   const productsQuery = useQuery({ queryKey: ['admin', 'products'], queryFn: adminService.getProducts, enabled: section === 'overview' || section === 'products' });
+-  const ordersQuery = useQuery({ queryKey: ['admin', 'orders', orderStatus], queryFn: () => adminService.getOrders(orderStatus), enabled: section === 'orders' });
+   const usersQuery = useQuery({ queryKey: ['admin', 'users'], queryFn: adminService.getUsers, enabled: section === 'users' });
+   const discountsQuery = useQuery({ queryKey: ['admin', 'discounts'], queryFn: adminService.getDiscounts, enabled: section === 'discounts' });
+-  const blogQuery = useQuery({ queryKey: ['admin', 'blog'], queryFn: adminService.getBlogPosts, enabled: section === 'blog' });
+   const productOptionsQuery = useQuery({ queryKey: ['admin', 'product-options'], queryFn: adminService.getProductOptions, enabled: productFormOpen });
+ 
+   const createProductMutation = useMutation({
+@@ -200,11 +194,6 @@
+       ]);
+     },
+   });
+-  const updateOrderMutation = useMutation({
+-    mutationFn: ({ id, status }: { id: number; status: string }) => adminService.updateOrderStatus(id, status),
+-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'orders'] }),
+-  });
+-
+   const filteredProducts = useMemo(() => {
+     const products = productsQuery.data?.products ?? [];
+     const query = productSearch.trim().toLocaleLowerCase('ru-RU');
+@@ -278,7 +267,7 @@
+     };
+ 
+     if (editingProduct) {
++      updateProductMutation.mutate({ ...product, id: editingProduct.id, mainImageUrl: editingProduct.sourceMainImageUrl, slug: editingProduct.slug });
+-      updateProductMutation.mutate({ ...product, id: editingProduct.id, mainImageUrl: editingProduct.mainImageUrl, slug: editingProduct.slug });
+       return;
+     }
+ 
+@@ -335,7 +324,7 @@
+                   </section>
+                   <section className="admin-backend-grid">
+                     <article><span className="is-online" /><div><strong>Backend доступен</strong><small>Статистика получена из <code>GET /api/admin/stats</code></small></div></article>
++                    <article><ShieldCheck /><div><strong>Клиентская проверка роли</strong><small>Backend должен вернуть [Authorize(Roles = "Admin")] на AdminController</small></div></article>
+-                    <article><ShieldCheck /><div><strong>Роль подтверждена</strong><small>Доступ открыт по роли Admin из JWT</small></div></article>
+                     <article><Store /><div><strong>{dashboardQuery.data.totalCategories} категорий</strong><small>Актуальная структура каталога КЕЛО</small></div></article>
+                   </section>
+                 </>
+@@ -354,17 +343,8 @@
+             </section>
+           )}
+ 
++          {section === 'orders' && <AdminOrdersSection />}
++
+-          {section === 'orders' && (
+-            <section className="admin-panel-card">
+-              <div className="admin-section-heading"><div><span className="admin-kicker">Продажи</span><h2>Все заказы</h2><p>{ordersQuery.data ? `${ordersQuery.data.total} заказов в backend` : 'Очередь заказов магазина'}</p></div><label className="admin-status-filter"><span>Статус</span><select value={orderStatus} onChange={(event) => setOrderStatus(event.target.value)}><option value="">Все</option>{orderStatuses.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></label></div>
+-              <QueryState isPending={ordersQuery.isPending} isError={ordersQuery.isError} onRetry={() => void ordersQuery.refetch()} />
+-              {ordersQuery.data && <div className="admin-table-scroll"><table className="admin-table"><thead><tr><th>Заказ</th><th>Покупатель</th><th>Дата</th><th>Сумма</th><th>Позиций</th><th>Статус</th></tr></thead><tbody>
+-                {ordersQuery.data.orders.map((order) => <tr key={order.id}><td><strong>{order.orderNumber}</strong></td><td>{order.customerName}</td><td>{formatDate(order.orderDate)}</td><td><strong>{formatMoney(order.total)}</strong></td><td>{order.itemsCount}</td><td><select className="admin-order-status" value={order.status} disabled={updateOrderMutation.isPending && updateOrderMutation.variables?.id === order.id} onChange={(event) => updateOrderMutation.mutate({ id: order.id, status: event.target.value })}>{orderStatuses.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></td></tr>)}
+-                {!ordersQuery.data.orders.length && <tr><td className="admin-table-empty" colSpan={6}>Заказов с выбранным статусом нет.</td></tr>}
+-              </tbody></table></div>}
+-              {updateOrderMutation.isError && <div className="admin-mutation-error">Статус не сохранён. Повторите попытку.</div>}
+-            </section>
+-          )}
+           {section === 'users' && (
+             <section className="admin-panel-card">
+               <div className="admin-section-heading"><div><span className="admin-kicker">Аудитория</span><h2>Пользователи</h2><p>{usersQuery.data ? `${usersQuery.data.total} зарегистрированных пользователей` : 'Покупатели магазина'}</p></div></div>
+@@ -375,6 +355,9 @@
+               </tbody></table></div>}
+             </section>
+           )}
++          {section === 'categories' && <AdminCategoriesSection />}
++          {section === 'brands' && <AdminBrandsSection />}
++
+           {section === 'custom-orders' && <UnavailableSection icon={FilePenLine} title="Заявки на индивидуальные изделия" description="GET /api/customorder выдаёт только заявки авторизованного пользователя. Для общей очереди производства нужен отдельный защищённый контракт." endpoints={['GET /api/admin/custom-orders', 'GET /api/admin/custom-orders/{id}', 'PUT /api/admin/custom-orders/{id}/status']} />}
+ 
+           {section === 'discounts' && (
+@@ -391,19 +374,7 @@
+             </section>
+           )}
+ 
++          {section === 'blog' && <AdminBlogSection />}
+-          {section === 'blog' && (
+-            <section className="admin-panel-card">
+-              <div className="admin-section-heading"><div><span className="admin-kicker">Контент</span><h2>Публикации</h2><p>{blogQuery.data ? `${blogQuery.data.totalPosts} опубликованных материалов` : 'Статьи из актуального backend'}</p></div><button type="button" disabled>Новая статья</button></div>
+-              <IntegrationNote />
+-              <QueryState isPending={blogQuery.isPending} isError={blogQuery.isError} onRetry={() => void blogQuery.refetch()} />
+-              {blogQuery.data && (
+-                <div className="admin-table-scroll"><table className="admin-table"><thead><tr><th>Публикация</th><th>Категория</th><th>Автор</th><th>Дата</th><th>Чтение</th></tr></thead><tbody>
+-                  {blogQuery.data.posts.map((post) => <tr key={post.id}><td><div className="admin-post-cell"><span><BookOpen size={18} /></span><div><strong>{post.title}</strong><small>/{post.slug}</small></div></div></td><td>{post.category || 'Без категории'}</td><td>{post.authorName || 'КЕЛО'}</td><td>{formatDate(post.publishedAt)}</td><td>{post.readTimeMinutes} мин.</td></tr>)}
+-                  {!blogQuery.data.posts.length && <tr><td className="admin-table-empty" colSpan={5}>Опубликованных статей пока нет.</td></tr>}
+-                </tbody></table></div>
+-              )}
+-            </section>
+-          )}
+         </div>
+       </main>
+ 
+diff --git a/src/styles/index.css b/src/styles/index.css
+--- a/src/styles/index.css
++++ b/src/styles/index.css
+@@ -656,6 +656,17 @@
+ .admin-modal__actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
+ .admin-modal__actions button { min-height: 43px; padding: 0 19px; border: 1px solid var(--border); border-radius: 999px; background: white; font-size: .76rem; font-weight: 750; }
+ .admin-modal__actions button[type="submit"] { border-color: var(--green-800); background: var(--green-800); color: white; }
++.admin-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 0 22px; }
++.admin-detail-grid > div { padding: 13px 14px; border: 1px solid var(--border); border-radius: 10px; background: #fafcfb; }
++.admin-detail-grid dt { margin-bottom: 4px; color: #839087; font-size: .65rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
++.admin-detail-grid dd { margin: 0; color: var(--ink); font-size: .78rem; overflow-wrap: anywhere; }
++.admin-order-totals { width: min(360px, 100%); display: grid; gap: 8px; margin: 22px 0 0 auto; }
++.admin-order-totals > div { display: flex; justify-content: space-between; gap: 18px; font-size: .78rem; }
++.admin-order-totals dt, .admin-order-totals dd { margin: 0; }
++.admin-order-totals > div:last-child { margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--border); color: var(--green-900); font-weight: 800; }
++.admin-table td small { color: var(--muted); line-height: 1.45; }
++.admin-form-grid label > span { display: inline-flex; align-items: center; gap: 5px; }
++
+ .admin-access-denied { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--green-50); }
+ .admin-access-denied > div { width: min(570px, 100%); padding: 52px; border: 1px solid var(--border); border-radius: 24px; background: white; box-shadow: var(--shadow); text-align: center; }
+ .admin-access-denied > div > span { width: 72px; height: 72px; display: grid; place-items: center; margin: 0 auto 22px; border-radius: 50%; background: #fff0ee; color: var(--danger); }
+@@ -892,6 +903,7 @@
+   .admin-modal__panel { max-height: calc(100vh - 16px); padding: 22px 16px; border-radius: 15px; }
+   .admin-form-grid { grid-template-columns: 1fr; }
+   .admin-form-wide { grid-column: auto; }
++  .admin-detail-grid { grid-template-columns: 1fr; }
+   .admin-modal__actions { flex-direction: column-reverse; }
+   .admin-modal__actions button { width: 100%; }
+   .admin-access-denied > div { padding: 36px 22px; }
+diff --git a/src/components/admin/AdminResourceSections.tsx b/src/components/admin/AdminResourceSections.tsx
+new file mode 100644
+--- /dev/null
++++ b/src/components/admin/AdminResourceSections.tsx
+@@ -0,0 +1,384 @@
++import { useState, type FormEvent, type ReactNode } from 'react';
++import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
++import { BookOpen, Eye, Image, Pencil, Plus, RefreshCw, Tags, Trash2, X } from 'lucide-react';
++import {
++  adminService,
++  type AdminBlogPost,
++  type AdminBrand,
++  type AdminCategory,
++} from '@/services/adminService';
++
++const moneyFormatter = new Intl.NumberFormat('ru-RU', {
++  style: 'currency',
++  currency: 'RUB',
++  maximumFractionDigits: 0,
++});
++const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
++  day: '2-digit',
++  month: 'short',
++  year: 'numeric',
++});
++const orderStatuses = [
++  { value: 'New', label: 'Новый' },
++  { value: 'Processing', label: 'В обработке' },
++  { value: 'Shipped', label: 'Отправлен' },
++  { value: 'Delivered', label: 'Доставлен' },
++  { value: 'Cancelled', label: 'Отменён' },
++];
++
++function formatDate(value?: string | null) {
++  if (!value) return '—';
++  const date = new Date(value);
++  return Number.isNaN(date.getTime()) ? '—' : dateFormatter.format(date);
++}
++
++function getErrorMessage(error: unknown, fallback: string) {
++  return error instanceof Error && error.message ? error.message : fallback;
++}
++
++function getImage(formData: FormData, name: string): File | null {
++  const entry = formData.get(name);
++  if (!(entry instanceof File) || entry.size === 0) return null;
++  if (entry.size > 5 * 1024 * 1024) throw new Error('Размер изображения не должен превышать 5 МБ.');
++  return entry;
++}
++
++function ResourceState({ pending, error, retry }: { pending: boolean; error: boolean; retry: () => void }) {
++  if (pending) {
++    return <div className="admin-state"><RefreshCw className="spin" /><strong>Получаем данные</strong><span>Запрашиваем актуальную информацию у backend.</span></div>;
++  }
++  if (error) {
++    return <div className="admin-state is-error"><strong>Не удалось загрузить данные</strong><button type="button" onClick={retry}><RefreshCw size={16} /> Повторить</button></div>;
++  }
++  return null;
++}
++
++function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
++  return (
++    <div className="admin-modal" role="dialog" aria-modal="true" aria-label={title}>
++      <button className="admin-modal__overlay" type="button" onClick={onClose} aria-label="Закрыть форму" />
++      <div className="admin-modal__panel">
++        <div className="admin-modal__header">
++          <div><span className="admin-kicker">Управление</span><h2>{title}</h2></div>
++          <button type="button" onClick={onClose} aria-label="Закрыть"><X /></button>
++        </div>
++        {children}
++      </div>
++    </div>
++  );
++}
++
++export function AdminOrdersSection() {
++  const queryClient = useQueryClient();
++  const [status, setStatus] = useState('');
++  const [selectedId, setSelectedId] = useState<number | null>(null);
++  const ordersQuery = useQuery({
++    queryKey: ['admin', 'orders', status],
++    queryFn: () => adminService.getOrders(status),
++  });
++  const orderQuery = useQuery({
++    queryKey: ['admin', 'order', selectedId],
++    queryFn: () => adminService.getOrder(selectedId as number),
++    enabled: selectedId !== null,
++  });
++  const updateMutation = useMutation({
++    mutationFn: ({ id, nextStatus }: { id: number; nextStatus: string }) => adminService.updateOrderStatus(id, nextStatus),
++    onSuccess: async (_, variables) => {
++      await Promise.all([
++        queryClient.invalidateQueries({ queryKey: ['admin', 'orders'] }),
++        queryClient.invalidateQueries({ queryKey: ['admin', 'order', variables.id] }),
++        queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] }),
++      ]);
++    },
++  });
++
++  return (
++    <>
++      <section className="admin-panel-card">
++        <div className="admin-section-heading">
++          <div><span className="admin-kicker">Продажи</span><h2>Все заказы</h2><p>{ordersQuery.data ? `${ordersQuery.data.total} заказов в backend` : 'Очередь заказов магазина'}</p></div>
++          <label className="admin-status-filter"><span>Статус</span><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Все</option>{orderStatuses.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
++        </div>
++        <ResourceState pending={ordersQuery.isPending} error={ordersQuery.isError} retry={() => void ordersQuery.refetch()} />
++        {ordersQuery.data && (
++          <div className="admin-table-scroll">
++            <table className="admin-table">
++              <thead><tr><th>Заказ</th><th>Покупатель</th><th>Дата</th><th>Сумма</th><th>Позиций</th><th>Статус</th><th aria-label="Действия" /></tr></thead>
++              <tbody>
++                {ordersQuery.data.orders.map((order) => (
++                  <tr key={order.id}>
++                    <td><strong>{order.orderNumber}</strong></td><td>{order.customerName}</td><td>{formatDate(order.orderDate)}</td>
++                    <td><strong>{moneyFormatter.format(order.total)}</strong></td><td>{order.itemsCount}</td>
++                    <td><select className="admin-order-status" value={order.status} disabled={updateMutation.isPending && updateMutation.variables?.id === order.id} onChange={(event) => updateMutation.mutate({ id: order.id, nextStatus: event.target.value })}>{orderStatuses.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></td>
++                    <td><button className="admin-row-action" type="button" onClick={() => setSelectedId(order.id)} aria-label="Открыть заказ"><Eye size={16} /></button></td>
++                  </tr>
++                ))}
++                {!ordersQuery.data.orders.length && <tr><td className="admin-table-empty" colSpan={7}>Заказов с выбранным статусом нет.</td></tr>}
++              </tbody>
++            </table>
++          </div>
++        )}
++        {updateMutation.isError && <div className="admin-mutation-error">{getErrorMessage(updateMutation.error, 'Статус не сохранён.')}</div>}
++      </section>
++
++      {selectedId !== null && (
++        <Modal title="Карточка заказа" onClose={() => setSelectedId(null)}>
++          <ResourceState pending={orderQuery.isPending} error={orderQuery.isError} retry={() => void orderQuery.refetch()} />
++          {orderQuery.data && (
++            <>
++              <dl className="admin-detail-grid">
++                <div><dt>Номер</dt><dd>{orderQuery.data.orderNumber}</dd></div>
++                <div><dt>Дата</dt><dd>{formatDate(orderQuery.data.orderDate)}</dd></div>
++                <div><dt>Оплата</dt><dd>{orderQuery.data.paymentMethod} · {orderQuery.data.paymentStatus}</dd></div>
++                <div><dt>Доставка</dt><dd>{orderQuery.data.shippingMethod}</dd></div>
++                <div className="admin-form-wide"><dt>Адрес</dt><dd>{orderQuery.data.shippingAddress || '—'}</dd></div>
++                <div className="admin-form-wide"><dt>Комментарий</dt><dd>{orderQuery.data.comment || '—'}</dd></div>
++              </dl>
++              <div className="admin-table-scroll">
++                <table className="admin-table">
++                  <thead><tr><th>Товар</th><th>Артикул</th><th>Количество</th><th>Цена</th><th>Сумма</th></tr></thead>
++                  <tbody>{(orderQuery.data.orderItems ?? []).map((item) => <tr key={item.id}><td>{item.productName}</td><td>{item.productSku || '—'}</td><td>{item.quantity}</td><td>{moneyFormatter.format(item.unitPrice)}</td><td><strong>{moneyFormatter.format(item.totalPrice)}</strong></td></tr>)}</tbody>
++                </table>
++              </div>
++              <dl className="admin-order-totals">
++                <div><dt>Товары</dt><dd>{moneyFormatter.format(orderQuery.data.subtotal)}</dd></div>
++                <div><dt>Доставка</dt><dd>{moneyFormatter.format(orderQuery.data.shippingCost)}</dd></div>
++                <div><dt>Скидка</dt><dd>{moneyFormatter.format(orderQuery.data.discountAmount)}</dd></div>
++                <div><dt>Итого</dt><dd>{moneyFormatter.format(orderQuery.data.total)}</dd></div>
++              </dl>
++            </>
++          )}
++        </Modal>
++      )}
++    </>
++  );
++}
++
++export function AdminCategoriesSection() {
++  const queryClient = useQueryClient();
++  const [editing, setEditing] = useState<AdminCategory | 'new' | null>(null);
++  const query = useQuery({ queryKey: ['admin', 'categories'], queryFn: adminService.getCategories });
++  const saveMutation = useMutation({
++    mutationFn: ({ id, name, description, displayOrder }: { id?: number; name: string; description: string; displayOrder: number }) => {
++      const input = { name, description, displayOrder, parentCategoryId: null };
++      return id ? adminService.updateCategory(id, input) : adminService.createCategory(input);
++    },
++    onSuccess: async () => {
++      setEditing(null);
++      await Promise.all([
++        queryClient.invalidateQueries({ queryKey: ['admin', 'categories'] }),
++        queryClient.invalidateQueries({ queryKey: ['admin', 'product-options'] }),
++        queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] }),
++        queryClient.invalidateQueries({ queryKey: ['categories'] }),
++      ]);
++    },
++  });
++  const deleteMutation = useMutation({
++    mutationFn: adminService.deleteCategory,
++    onSuccess: async () => {
++      await Promise.all([
++        queryClient.invalidateQueries({ queryKey: ['admin', 'categories'] }),
++        queryClient.invalidateQueries({ queryKey: ['admin', 'product-options'] }),
++        queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] }),
++        queryClient.invalidateQueries({ queryKey: ['categories'] }),
++      ]);
++    },
++  });
++
++  const submit = (event: FormEvent<HTMLFormElement>) => {
++    event.preventDefault();
++    const data = new FormData(event.currentTarget);
++    saveMutation.mutate({
++      id: editing === 'new' || editing === null ? undefined : editing.id,
++      name: String(data.get('name') ?? '').trim(),
++      description: String(data.get('description') ?? '').trim(),
++      displayOrder: Number(data.get('displayOrder')),
++    });
++  };
++
++  return (
++    <>
++      <section className="admin-panel-card">
++        <div className="admin-section-heading"><div><span className="admin-kicker">Каталог</span><h2>Категории</h2><p>{query.data ? `${query.data.length} категорий` : 'Структура каталога'}</p></div><button type="button" onClick={() => { saveMutation.reset(); setEditing('new'); }}><Plus size={17} /> Добавить категорию</button></div>
++        <ResourceState pending={query.isPending} error={query.isError} retry={() => void query.refetch()} />
++        {query.data && <div className="admin-table-scroll"><table className="admin-table"><thead><tr><th>Категория</th><th>Slug</th><th>Товаров</th><th>Порядок</th><th aria-label="Действия" /></tr></thead><tbody>
++          {query.data.map((category) => <tr key={category.id}><td><strong>{category.name}</strong><br /><small>{category.description || 'Без описания'}</small></td><td><code>{category.slug}</code></td><td>{category.productCount}</td><td>{category.displayOrder}</td><td><div className="admin-row-actions"><button className="admin-row-action" type="button" onClick={() => { saveMutation.reset(); setEditing(category); }} aria-label="Редактировать"><Pencil size={16} /></button><button className="admin-row-action is-danger" type="button" disabled={deleteMutation.isPending} onClick={() => window.confirm(`Удалить категорию «${category.name}»?`) && deleteMutation.mutate(category.id)} aria-label="Удалить"><Trash2 size={16} /></button></div></td></tr>)}
++          {!query.data.length && <tr><td className="admin-table-empty" colSpan={5}>Категорий пока нет.</td></tr>}
++        </tbody></table></div>}
++        {deleteMutation.isError && <div className="admin-mutation-error">{getErrorMessage(deleteMutation.error, 'Категория не удалена. Возможно, к ней привязаны товары.')}</div>}
++      </section>
++      {editing && <Modal title={editing === 'new' ? 'Новая категория' : 'Редактирование категории'} onClose={() => setEditing(null)}>
++        <form onSubmit={submit}>
++          <div className="admin-form-grid">
++            <label className="admin-form-wide"><span>Название</span><input name="name" required maxLength={100} defaultValue={editing === 'new' ? '' : editing.name} /></label>
++            <label><span>Порядок отображения</span><input name="displayOrder" type="number" min="0" defaultValue={editing === 'new' ? 0 : editing.displayOrder} /></label>
++            <label className="admin-form-wide"><span>Описание</span><textarea name="description" maxLength={500} rows={4} defaultValue={editing === 'new' ? '' : editing.description ?? ''} /></label>
++          </div>
++          {saveMutation.isError && <div className="admin-mutation-error">{getErrorMessage(saveMutation.error, 'Категория не сохранена.')}</div>}
++          <div className="admin-modal__actions"><button type="button" onClick={() => setEditing(null)}>Отмена</button><button type="submit" disabled={saveMutation.isPending}>{saveMutation.isPending ? 'Сохраняем...' : 'Сохранить'}</button></div>
++        </form>
++      </Modal>}
++    </>
++  );
++}
++
++export function AdminBrandsSection() {
++  const queryClient = useQueryClient();
++  const [editing, setEditing] = useState<AdminBrand | 'new' | null>(null);
++  const query = useQuery({ queryKey: ['admin', 'brands'], queryFn: adminService.getBrands });
++  const loadMutation = useMutation({ mutationFn: adminService.getBrand, onSuccess: setEditing });
++  const saveMutation = useMutation({
++    mutationFn: ({ id, input }: { id?: number; input: Parameters<typeof adminService.createBrand>[0] }) => id ? adminService.updateBrand(id, input) : adminService.createBrand(input),
++    onSuccess: async () => {
++      setEditing(null);
++      await Promise.all([
++        queryClient.invalidateQueries({ queryKey: ['admin', 'brands'] }),
++        queryClient.invalidateQueries({ queryKey: ['admin', 'product-options'] }),
++        queryClient.invalidateQueries({ queryKey: ['brands'] }),
++      ]);
++    },
++  });
++  const deleteMutation = useMutation({
++    mutationFn: adminService.deleteBrand,
++    onSuccess: async () => {
++      await Promise.all([
++        queryClient.invalidateQueries({ queryKey: ['admin', 'brands'] }),
++        queryClient.invalidateQueries({ queryKey: ['admin', 'product-options'] }),
++        queryClient.invalidateQueries({ queryKey: ['brands'] }),
++      ]);
++    },
++  });
++
++  const submit = (event: FormEvent<HTMLFormElement>) => {
++    event.preventDefault();
++    const data = new FormData(event.currentTarget);
++    try {
++      const logo = getImage(data, 'logo');
++      saveMutation.mutate({
++        id: editing === 'new' || editing === null ? undefined : editing.id,
++        input: {
++          name: String(data.get('name') ?? '').trim(),
++          description: String(data.get('description') ?? '').trim(),
++          isActive: data.get('isActive') === 'on',
++          logo,
++          logoUrl: editing === 'new' || editing === null ? null : editing.sourceLogoUrl,
++          removeLogo: data.get('removeLogo') === 'on' && !logo,
++        },
++      });
++    } catch (error) {
++      window.alert(getErrorMessage(error, 'Проверьте выбранный файл.'));
++    }
++  };
++
++  return (
++    <>
++      <section className="admin-panel-card">
++        <div className="admin-section-heading"><div><span className="admin-kicker">Каталог</span><h2>Бренды</h2><p>{query.data ? `${query.data.total} брендов` : 'Производители товаров'}</p></div><button type="button" onClick={() => { saveMutation.reset(); setEditing('new'); }}><Plus size={17} /> Добавить бренд</button></div>
++        <ResourceState pending={query.isPending} error={query.isError} retry={() => void query.refetch()} />
++        {query.data && <div className="admin-table-scroll"><table className="admin-table"><thead><tr><th>Бренд</th><th>Slug</th><th>Товаров</th><th aria-label="Действия" /></tr></thead><tbody>
++          {query.data.brands.map((brand) => <tr key={brand.id}><td><div className="admin-product-cell">{brand.logoUrl ? <img src={brand.logoUrl} alt="" /> : <span>{brand.name.slice(0, 1)}</span>}<div><strong>{brand.name}</strong><small>{brand.description || 'Без описания'}</small></div></div></td><td><code>{brand.slug}</code></td><td>{brand.productCount}</td><td><div className="admin-row-actions"><button className="admin-row-action" type="button" disabled={loadMutation.isPending} onClick={() => loadMutation.mutate(brand.id)} aria-label="Редактировать"><Pencil size={16} /></button><button className="admin-row-action is-danger" type="button" disabled={deleteMutation.isPending} onClick={() => window.confirm(`Удалить бренд «${brand.name}»?`) && deleteMutation.mutate(brand.id)} aria-label="Удалить"><Trash2 size={16} /></button></div></td></tr>)}
++          {!query.data.brands.length && <tr><td className="admin-table-empty" colSpan={4}>Брендов пока нет.</td></tr>}
++        </tbody></table></div>}
++        {(loadMutation.isError || deleteMutation.isError) && <div className="admin-mutation-error">{getErrorMessage(loadMutation.error ?? deleteMutation.error, 'Операция с брендом не выполнена.')}</div>}
++      </section>
++      {editing && <Modal title={editing === 'new' ? 'Новый бренд' : 'Редактирование бренда'} onClose={() => setEditing(null)}>
++        <form onSubmit={submit}>
++          <div className="admin-form-grid">
++            <label className="admin-form-wide"><span>Название</span><input name="name" required maxLength={100} defaultValue={editing === 'new' ? '' : editing.name} /></label>
++            <label className="admin-form-wide"><span>Описание</span><textarea name="description" maxLength={500} rows={4} defaultValue={editing === 'new' ? '' : editing.description ?? ''} /></label>
++            <label className="admin-form-wide"><span>Логотип</span><input name="logo" type="file" accept="image/jpeg,image/png,image/gif,image/webp" /><small>JPG, PNG, GIF или WebP, не более 5 МБ.</small></label>
++          </div>
++          <div className="admin-check-grid">
++            <label><input name="isActive" type="checkbox" defaultChecked={editing === 'new' ? true : editing.isActive} /> Активен</label>
++            {editing !== 'new' && editing.logoUrl && <label><input name="removeLogo" type="checkbox" /> Удалить текущий логотип</label>}
++          </div>
++          {saveMutation.isError && <div className="admin-mutation-error">{getErrorMessage(saveMutation.error, 'Бренд не сохранён.')}</div>}
++          <div className="admin-modal__actions"><button type="button" onClick={() => setEditing(null)}>Отмена</button><button type="submit" disabled={saveMutation.isPending}>{saveMutation.isPending ? 'Сохраняем...' : 'Сохранить'}</button></div>
++        </form>
++      </Modal>}
++    </>
++  );
++}
++
++export function AdminBlogSection() {
++  const queryClient = useQueryClient();
++  const [editing, setEditing] = useState<AdminBlogPost | 'new' | null>(null);
++  const query = useQuery({ queryKey: ['admin', 'blog'], queryFn: adminService.getBlogPosts });
++  const loadMutation = useMutation({ mutationFn: adminService.getBlogPost, onSuccess: setEditing });
++  const saveMutation = useMutation({
++    mutationFn: ({ id, input }: { id?: number; input: Parameters<typeof adminService.createBlogPost>[0] }) => id ? adminService.updateBlogPost(id, input) : adminService.createBlogPost(input),
++    onSuccess: async () => {
++      setEditing(null);
++      await Promise.all([
++        queryClient.invalidateQueries({ queryKey: ['admin', 'blog'] }),
++        queryClient.invalidateQueries({ queryKey: ['articles'] }),
++      ]);
++    },
++  });
++  const deleteMutation = useMutation({
++    mutationFn: adminService.deleteBlogPost,
++    onSuccess: async () => {
++      await Promise.all([
++        queryClient.invalidateQueries({ queryKey: ['admin', 'blog'] }),
++        queryClient.invalidateQueries({ queryKey: ['articles'] }),
++      ]);
++    },
++  });
++
++  const submit = (event: FormEvent<HTMLFormElement>) => {
++    event.preventDefault();
++    const data = new FormData(event.currentTarget);
++    try {
++      const featuredImage = getImage(data, 'featuredImage');
++      saveMutation.mutate({
++        id: editing === 'new' || editing === null ? undefined : editing.id,
++        input: {
++          title: String(data.get('title') ?? '').trim(),
++          shortDescription: String(data.get('shortDescription') ?? '').trim(),
++          content: String(data.get('content') ?? '').trim(),
++          category: String(data.get('category') ?? '').trim(),
++          readTimeMinutes: Number(data.get('readTimeMinutes')),
++          isPublished: data.get('isPublished') === 'on',
++          tags: String(data.get('tags') ?? '').split(',').map((tag) => tag.trim()).filter(Boolean),
++          featuredImage,
++          removeFeaturedImage: data.get('removeFeaturedImage') === 'on' && !featuredImage,
++        },
++      });
++    } catch (error) {
++      window.alert(getErrorMessage(error, 'Проверьте выбранный файл.'));
++    }
++  };
++
++  return (
++    <>
++      <section className="admin-panel-card">
++        <div className="admin-section-heading"><div><span className="admin-kicker">Контент</span><h2>Публикации</h2><p>{query.data ? `${query.data.totalPosts} материалов` : 'Статьи магазина'}</p></div><button type="button" onClick={() => { saveMutation.reset(); setEditing('new'); }}><Plus size={17} /> Новая статья</button></div>
++        <ResourceState pending={query.isPending} error={query.isError} retry={() => void query.refetch()} />
++        {query.data && <div className="admin-table-scroll"><table className="admin-table"><thead><tr><th>Публикация</th><th>Категория</th><th>Дата</th><th>Статус</th><th aria-label="Действия" /></tr></thead><tbody>
++          {query.data.posts.map((post) => <tr key={post.id}><td><div className="admin-post-cell"><span>{post.featuredImageUrl ? <Image size={18} /> : <BookOpen size={18} />}</span><div><strong>{post.title}</strong><small>/{post.slug} · {post.readTimeMinutes} мин.</small></div></div></td><td>{post.category || 'Без категории'}</td><td>{formatDate(post.publishedAt)}</td><td><span className={`admin-badge ${post.isPublished ? 'is-success' : 'is-muted'}`}>{post.isPublished ? 'Опубликована' : 'Черновик'}</span></td><td><div className="admin-row-actions"><button className="admin-row-action" type="button" disabled={loadMutation.isPending} onClick={() => loadMutation.mutate(post.id)} aria-label="Редактировать"><Pencil size={16} /></button><button className="admin-row-action is-danger" type="button" disabled={deleteMutation.isPending} onClick={() => window.confirm(`Удалить статью «${post.title}»?`) && deleteMutation.mutate(post.id)} aria-label="Удалить"><Trash2 size={16} /></button></div></td></tr>)}
++          {!query.data.posts.length && <tr><td className="admin-table-empty" colSpan={5}>Публикаций пока нет.</td></tr>}
++        </tbody></table></div>}
++        {(loadMutation.isError || deleteMutation.isError) && <div className="admin-mutation-error">{getErrorMessage(loadMutation.error ?? deleteMutation.error, 'Операция со статьёй не выполнена.')}</div>}
++      </section>
++      {editing && <Modal title={editing === 'new' ? 'Новая статья' : 'Редактирование статьи'} onClose={() => setEditing(null)}>
++        <form onSubmit={submit}>
++          <div className="admin-form-grid">
++            <label className="admin-form-wide"><span>Заголовок</span><input name="title" required maxLength={200} defaultValue={editing === 'new' ? '' : editing.title} /></label>
++            <label><span>Категория</span><select name="category" required defaultValue={editing === 'new' ? query.data?.categories[0] ?? '' : editing.category ?? ''}><option value="">Выберите категорию</option>{query.data?.categories.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
++            <label><span>Время чтения, мин.</span><input name="readTimeMinutes" type="number" min="1" defaultValue={editing === 'new' ? 5 : editing.readTimeMinutes} /></label>
++            <label className="admin-form-wide"><span>Краткое описание</span><textarea name="shortDescription" maxLength={500} rows={3} defaultValue={editing === 'new' ? '' : editing.shortDescription ?? ''} /></label>
++            <label className="admin-form-wide"><span>Текст статьи</span><textarea name="content" required rows={10} defaultValue={editing === 'new' ? '' : editing.content} /></label>
++            <label className="admin-form-wide"><span><Tags size={14} /> Теги через запятую</span><input name="tags" defaultValue={editing === 'new' ? '' : editing.tags.join(', ')} /></label>
++            <label className="admin-form-wide"><span>Обложка</span><input name="featuredImage" type="file" accept="image/jpeg,image/png,image/gif,image/webp" /><small>JPG, PNG, GIF или WebP, не более 5 МБ.</small></label>
++          </div>
++          <div className="admin-check-grid">
++            <label><input name="isPublished" type="checkbox" defaultChecked={editing === 'new' ? true : editing.isPublished} /> Опубликована</label>
++            {editing !== 'new' && editing.featuredImageUrl && <label><input name="removeFeaturedImage" type="checkbox" /> Удалить текущую обложку</label>}
++          </div>
++          {saveMutation.isError && <div className="admin-mutation-error">{getErrorMessage(saveMutation.error, 'Статья не сохранена.')}</div>}
++          <div className="admin-modal__actions"><button type="button" onClick={() => setEditing(null)}>Отмена</button><button type="submit" disabled={saveMutation.isPending}>{saveMutation.isPending ? 'Сохраняем...' : 'Сохранить'}</button></div>
++        </form>
++      </Modal>}
++    </>
++  );
++}
