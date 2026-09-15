@@ -1,5 +1,5 @@
 import { apiRequest, resolveApiAssetUrl } from '@/api/client';
-import { brands, promotions } from '@/data/mockData';
+import { promotions } from '@/data/mockData';
 import type {
   Article,
   Brand,
@@ -56,6 +56,9 @@ interface ApiMaterialDto {
 interface ApiBrandDto {
   id: number;
   name: string;
+  description?: string | null;
+  slug?: string | null;
+  logoUrl?: string | null;
   productCount: number;
 }
 
@@ -155,6 +158,16 @@ function mapArticle(post: ApiBlogPostDto): Article {
     publishedAt: formatArticleDate(post.publishedAt),
     readingTime: post.readTimeMinutes,
     image: resolveApiAssetUrl(post.featuredImageUrl),
+  };
+}
+
+function mapBrand(brand: ApiBrandDto): Brand {
+  return {
+    id: String(brand.id),
+    slug: brand.slug || String(brand.id),
+    name: brand.name,
+    description: brand.description ?? '',
+    image: resolveApiAssetUrl(brand.logoUrl),
   };
 }
 
@@ -355,8 +368,7 @@ export const catalogService = {
   },
 
   async getBrands(): Promise<Brand[]> {
-    if (!useContentMocks) return apiRequest<Brand[]>('/brands');
-    await delay(100);
-    return brands;
+    const response = await apiRequest<ApiBrandDto[]>('/Brand');
+    return response.map(mapBrand);
   },
 };
