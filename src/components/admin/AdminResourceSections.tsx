@@ -225,11 +225,19 @@ export function AdminCategoriesSection() {
 export function AdminBrandsSection() {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<AdminBrand | 'new' | null>(null);
+  const [logoSelected, setLogoSelected] = useState(false);
   const query = useQuery({ queryKey: ['admin', 'brands'], queryFn: adminService.getBrands });
-  const loadMutation = useMutation({ mutationFn: adminService.getBrand, onSuccess: setEditing });
+  const loadMutation = useMutation({
+    mutationFn: adminService.getBrand,
+    onSuccess: (brand) => {
+      setLogoSelected(false);
+      setEditing(brand);
+    },
+  });
   const saveMutation = useMutation({
     mutationFn: ({ id, input }: { id?: number; input: Parameters<typeof adminService.createBrand>[0] }) => id ? adminService.updateBrand(id, input) : adminService.createBrand(input),
     onSuccess: async () => {
+      setLogoSelected(false);
       setEditing(null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['admin', 'brands'] }),
@@ -273,7 +281,7 @@ export function AdminBrandsSection() {
   return (
     <>
       <section className="admin-panel-card">
-        <div className="admin-section-heading"><div><span className="admin-kicker">Каталог</span><h2>Бренды</h2><p>{query.data ? `${query.data.total} брендов` : 'Производители товаров'}</p></div><button type="button" onClick={() => { saveMutation.reset(); setEditing('new'); }}><Plus size={17} /> Добавить бренд</button></div>
+        <div className="admin-section-heading"><div><span className="admin-kicker">Каталог</span><h2>Бренды</h2><p>{query.data ? `${query.data.total} брендов` : 'Производители товаров'}</p></div><button type="button" onClick={() => { saveMutation.reset(); setLogoSelected(false); setEditing('new'); }}><Plus size={17} /> Добавить бренд</button></div>
         <ResourceState pending={query.isPending} error={query.isError} retry={() => void query.refetch()} />
         {query.data && <div className="admin-table-scroll"><table className="admin-table"><thead><tr><th>Бренд</th><th>Slug</th><th>Товаров</th><th aria-label="Действия" /></tr></thead><tbody>
           {query.data.brands.map((brand) => <tr key={brand.id}><td><div className="admin-product-cell">{brand.logoUrl ? <img src={brand.logoUrl} alt="" /> : <span>{brand.name.slice(0, 1)}</span>}<div><strong>{brand.name}</strong><small>{brand.description || 'Без описания'}</small></div></div></td><td><code>{brand.slug}</code></td><td>{brand.productCount}</td><td><div className="admin-row-actions"><button className="admin-row-action" type="button" disabled={loadMutation.isPending} onClick={() => loadMutation.mutate(brand.id)} aria-label="Редактировать"><Pencil size={16} /></button><button className="admin-row-action is-danger" type="button" disabled={deleteMutation.isPending} onClick={() => window.confirm(`Удалить бренд «${brand.name}»?`) && deleteMutation.mutate(brand.id)} aria-label="Удалить"><Trash2 size={16} /></button></div></td></tr>)}
@@ -281,19 +289,19 @@ export function AdminBrandsSection() {
         </tbody></table></div>}
         {(loadMutation.isError || deleteMutation.isError) && <div className="admin-mutation-error">{getErrorMessage(loadMutation.error ?? deleteMutation.error, 'Операция с брендом не выполнена.')}</div>}
       </section>
-      {editing && <Modal title={editing === 'new' ? 'Новый бренд' : 'Редактирование бренда'} onClose={() => setEditing(null)}>
+      {editing && <Modal title={editing === 'new' ? 'Новый бренд' : 'Редактирование бренда'} onClose={() => { setLogoSelected(false); setEditing(null); }}>
         <form onSubmit={submit}>
           <div className="admin-form-grid">
             <label className="admin-form-wide"><span>Название</span><input name="name" required maxLength={100} defaultValue={editing === 'new' ? '' : editing.name} /></label>
             <label className="admin-form-wide"><span>Описание</span><textarea name="description" maxLength={500} rows={4} defaultValue={editing === 'new' ? '' : editing.description ?? ''} /></label>
-            <label className="admin-form-wide"><span>Логотип</span><input name="logo" type="file" accept="image/jpeg,image/png,image/gif,image/webp" /><small>JPG, PNG, GIF или WebP, не более 5 МБ.</small></label>
+            <label className="admin-form-wide"><span>Логотип{editing === 'new' ? ' *' : ''}</span><input name="logo" type="file" required={editing === 'new'} accept="image/jpeg,image/png,image/gif,image/webp" onChange={(event) => setLogoSelected(Boolean(event.target.files?.length))} /><small>{editing === 'new' ? 'Обязательное поле. ' : ''}JPG, PNG, GIF или WebP, не более 5 МБ.</small></label>
           </div>
           <div className="admin-check-grid">
             <label><input name="isActive" type="checkbox" defaultChecked={editing === 'new' ? true : editing.isActive} /> Активен</label>
             {editing !== 'new' && editing.logoUrl && <label><input name="removeLogo" type="checkbox" /> Удалить текущий логотип</label>}
           </div>
           {saveMutation.isError && <div className="admin-mutation-error">{getErrorMessage(saveMutation.error, 'Бренд не сохранён.')}</div>}
-          <div className="admin-modal__actions"><button type="button" onClick={() => setEditing(null)}>Отмена</button><button type="submit" disabled={saveMutation.isPending}>{saveMutation.isPending ? 'Сохраняем...' : 'Сохранить'}</button></div>
+          <div className="admin-modal__actions"><button type="button" onClick={() => { setLogoSelected(false); setEditing(null); }}>Отмена</button><button type="submit" disabled={saveMutation.isPending || (editing === 'new' && !logoSelected)}>{saveMutation.isPending ? 'Сохраняем...' : 'Сохранить'}</button></div>
         </form>
       </Modal>}
     </>
