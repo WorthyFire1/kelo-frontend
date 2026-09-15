@@ -455,10 +455,17 @@ export const adminService = {
 
   async getBlogPosts(): Promise<BlogAdminData> {
     const [data, categories] = await Promise.all([
-      apiRequest<Omit<BlogAdminData, 'categories'>>('/admin/BlogPostsList?page=1&pageSize=100'),
+      apiRequest<{ posts: AdminBlogPost[]; total: number; page: number; pageSize: number; totalPages: number }>('/admin/BlogPostsList?page=1&pageSize=100'),
       apiRequest<string[]>('/admin/blog-categories'),
     ]);
-    return { ...data, categories, posts: data.posts.map(normalizeBlogPost) };
+    return {
+      posts: data.posts.map(normalizeBlogPost),
+      totalPosts: data.total,
+      page: data.page,
+      pageSize: data.pageSize,
+      totalPages: data.totalPages,
+      categories,
+    };
   },
 
   async getBlogPost(id: number): Promise<AdminBlogPost> {

@@ -1,5 +1,5 @@
 import { apiRequest, resolveApiAssetUrl } from '@/api/client';
-import { articles, brands, promotions } from '@/data/mockData';
+import { brands, promotions } from '@/data/mockData';
 import type {
   Article,
   Brand,
@@ -97,6 +97,27 @@ interface HomeResponseDto {
   readySketches: number;
 }
 
+interface ApiBlogPostDto {
+  id: number;
+  title: string;
+  shortDescription?: string | null;
+  content?: string | null;
+  slug: string;
+  featuredImageUrl?: string | null;
+  category?: string | null;
+  readTimeMinutes: number;
+  publishedAt: string;
+}
+
+interface ApiBlogListResponseDto {
+  posts?: ApiBlogPostDto[];
+  totalPosts: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  categories?: string[];
+}
+
 const sortValues: Record<NonNullable<CatalogFilters['sort']>, string> = {
   popular: 'popularity',
   'price-asc': 'price_asc',
@@ -104,6 +125,38 @@ const sortValues: Record<NonNullable<CatalogFilters['sort']>, string> = {
   newest: 'newest',
   rating: 'rating',
 };
+
+const articleDateFormatter = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+});
+
+function formatArticleDate(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : articleDateFormatter.format(date);
+}
+
+function splitArticleContent(content?: string | null): string[] {
+  return (content ?? '')
+    .split(/\r?\n\s*\r?\n|\r?\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+}
+
+function mapArticle(post: ApiBlogPostDto): Article {
+  return {
+    id: String(post.id),
+    slug: post.slug,
+    title: post.title,
+    excerpt: post.shortDescription ?? '',
+    content: splitArticleContent(post.content),
+    category: post.category || 'Без категории',
+    publishedAt: formatArticleDate(post.publishedAt),
+    readingTime: post.readTimeMinutes,
+    image: resolveApiAssetUrl(post.featuredImageUrl),
+  };
+}
 
 function mapCategory(category: ApiCategoryDto): Category {
   return {
@@ -292,15 +345,13 @@ export const catalogService = {
   },
 
   async getArticles(): Promise<Article[]> {
-    if (!useContentMocks) return apiRequest<Article[]>('/articles');
-    await delay(100);
-    return articles;
+    const response = await apiRequest<ApiBlogListResponseDto>('/Blog?page=1&pageSize=1000');
+    return (response.posts ?? []).map(mapArticle);
   },
 
-  async getArticleBySlug(slug: string): Promise<Article | undefined> {
-    if (!useContentMocks) return apiRequest<Article>('/articles/' + encodeURIComponent(slug));
-    await delay(100);
-    return articles.find((article) => article.slug === slug);
+  async getArticleBySlug(slug: string): Promise<Article> {
+    const response = await apiRequest<ApiBlogPostDto>('/Blog/' + encodeURIComponent(slug));
+    return mapArticle(response);
   },
 
   async getBrands(): Promise<Brand[]> {

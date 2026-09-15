@@ -63,7 +63,7 @@ export interface Article {
   title: string;
   excerpt: string;
   content: string[];
-  category: 'Советы' | 'Истории' | 'Новости' | 'Уход за деревом';
+  category: string;
   publishedAt: string;
   readingTime: number;
   image?: string;

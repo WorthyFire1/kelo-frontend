@@ -8,19 +8,22 @@ import { ImagePlaceholder } from '@/components/ui/ImagePlaceholder';
 import { useArticles } from '@/hooks/useCatalog';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 
-const categories = ['Все', 'Советы', 'Истории', 'Новости', 'Уход за деревом'] as const;
-
 export function BlogPage() {
   useDocumentTitle('Блог');
   const articlesQuery = useArticles();
-  const [category, setCategory] = useState<(typeof categories)[number]>('Все');
+  const [category, setCategory] = useState('Все');
   const [query, setQuery] = useState('');
+
+  const categories = useMemo(
+    () => ['Все', ...Array.from(new Set((articlesQuery.data ?? []).map((article) => article.category)))],
+    [articlesQuery.data],
+  );
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase('ru-RU');
     return articlesQuery.data?.filter((article) =>
       (category === 'Все' || article.category === category)
-      && (!normalized || `${article.title} ${article.excerpt}`.toLocaleLowerCase('ru-RU').includes(normalized)),
+      && (!normalized || (article.title + ' ' + article.excerpt).toLocaleLowerCase('ru-RU').includes(normalized)),
     ) ?? [];
   }, [articlesQuery.data, category, query]);
 
@@ -40,16 +43,33 @@ export function BlogPage() {
         </div>
         <label className="inline-search"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск по статьям" /></label>
       </div>
-      {filtered.length ? (
+      {articlesQuery.isLoading ? (
+        <div className="article-grid article-grid--large" aria-label="Загрузка статей">
+          {Array.from({ length: 6 }, (_, index) => (
+            <div className="skeleton-card" key={index}>
+              <div className="skeleton skeleton--image" />
+              <div className="skeleton skeleton--line" />
+              <div className="skeleton skeleton--line skeleton--short" />
+            </div>
+          ))}
+        </div>
+      ) : articlesQuery.isError ? (
+        <EmptyState
+          icon={<Search />}
+          title="Не удалось загрузить статьи"
+          description={articlesQuery.error instanceof Error ? articlesQuery.error.message : 'Проверьте доступность backend и повторите запрос.'}
+          action={<button className="button button--primary" type="button" onClick={() => void articlesQuery.refetch()}>Повторить</button>}
+        />
+      ) : filtered.length ? (
         <div className="article-grid article-grid--large">
           {filtered.map((article) => (
             <article className="article-card" key={article.id}>
-              <Link to={`/blog/${article.slug}`}><ImagePlaceholder src={article.image} alt={article.title} label={article.category} /></Link>
+              <Link to={'/blog/' + article.slug}><ImagePlaceholder src={article.image} alt={article.title} label={article.category} /></Link>
               <div className="article-card__body">
                 <span>{article.category} · {article.publishedAt} · {article.readingTime} мин.</span>
-                <h2><Link to={`/blog/${article.slug}`}>{article.title}</Link></h2>
+                <h2><Link to={'/blog/' + article.slug}>{article.title}</Link></h2>
                 <p>{article.excerpt}</p>
-                <Link to={`/blog/${article.slug}`}>Читать <ArrowRight size={16} /></Link>
+                <Link to={'/blog/' + article.slug}>Читать <ArrowRight size={16} /></Link>
               </div>
             </article>
           ))}

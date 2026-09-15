@@ -1,5 +1,6 @@
 import { ArrowLeft, Clock3 } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
+import { ApiError } from '@/api/client';
 import { Breadcrumbs } from '@/components/ui/Breadcrumbs';
 import { Container } from '@/components/ui/Container';
 import { ImagePlaceholder } from '@/components/ui/ImagePlaceholder';
@@ -12,11 +13,25 @@ export function ArticlePage() {
   const article = articleQuery.data;
   useDocumentTitle(article?.title ?? 'Статья');
 
-  if (!article && !articleQuery.isLoading) {
-    return <Container className="page-shell center-message"><h1>Статья не найдена</h1><Link className="button button--primary" to="/blog">Вернуться в блог</Link></Container>;
+  if (articleQuery.isLoading) {
+    return <Container className="page-shell"><div className="skeleton skeleton--hero" /></Container>;
   }
 
-  if (!article) return <Container className="page-shell"><div className="skeleton skeleton--hero" /></Container>;
+  if (articleQuery.isError) {
+    const isNotFound = articleQuery.error instanceof ApiError && articleQuery.error.status === 404;
+    return (
+      <Container className="page-shell center-message">
+        <h1>{isNotFound ? 'Статья не найдена' : 'Не удалось загрузить статью'}</h1>
+        <p>{articleQuery.error instanceof Error ? articleQuery.error.message : 'Проверьте доступность backend.'}</p>
+        {!isNotFound && <button className="button button--secondary" type="button" onClick={() => void articleQuery.refetch()}>Повторить</button>}
+        <Link className="button button--primary" to="/blog">Вернуться в блог</Link>
+      </Container>
+    );
+  }
+
+  if (!article) {
+    return <Container className="page-shell center-message"><h1>Статья не найдена</h1><Link className="button button--primary" to="/blog">Вернуться в блог</Link></Container>;
+  }
 
   return (
     <Container className="page-shell article-page">
