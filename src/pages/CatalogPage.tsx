@@ -7,7 +7,7 @@ import { Breadcrumbs } from '@/components/ui/Breadcrumbs';
 import { Container } from '@/components/ui/Container';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingGrid } from '@/components/ui/LoadingGrid';
-import { useCategories, useProducts } from '@/hooks/useCatalog';
+import { useCatalogMaterials, useCategories, useProducts } from '@/hooks/useCatalog';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import type { CatalogFilters } from '@/types/catalog';
 
@@ -27,6 +27,7 @@ export function CatalogPage() {
   const query = searchParams.get('q') ?? '';
   const sort = (searchParams.get('sort') as CatalogFilters['sort']) ?? 'popular';
   const categoriesQuery = useCategories();
+  const materialsQuery = useCatalogMaterials();
 
   const requestFilters: CatalogFilters = useMemo(() => ({
     query,
@@ -39,7 +40,7 @@ export function CatalogPage() {
   }), [query, categoryId, filters, sort]);
 
   const productsQuery = useProducts(requestFilters);
-  const materials = useMemo(() => ['Бук', 'Дуб', 'Ясень', 'Массив дерева'], []);
+  const materials = materialsQuery.data ?? [];
   const activeCategory = categoriesQuery.data?.find((category) => category.id === categoryId);
 
   useEffect(() => {
@@ -103,6 +104,13 @@ export function CatalogPage() {
         <div>
           {productsQuery.isLoading ? (
             <LoadingGrid count={9} />
+          ) : productsQuery.isError ? (
+            <EmptyState
+              icon={<SlidersHorizontal />}
+              title="Не удалось загрузить каталог"
+              description={productsQuery.error instanceof Error ? productsQuery.error.message : 'Проверьте доступность backend и повторите запрос.'}
+              action={<button className="button button--primary" type="button" onClick={() => void productsQuery.refetch()}>Повторить</button>}
+            />
           ) : productsQuery.data?.length ? (
             <ProductGrid products={productsQuery.data} />
           ) : (

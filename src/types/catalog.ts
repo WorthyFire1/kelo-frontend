@@ -11,6 +11,12 @@ export interface Category {
   accent: string;
 }
 
+export interface CatalogFilterOption {
+  id: string;
+  name: string;
+  productCount: number;
+}
+
 export interface ProductSpecification {
   label: string;
   value: string;

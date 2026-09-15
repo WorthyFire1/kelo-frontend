@@ -1,4 +1,4 @@
-import type { Availability } from '@/types/catalog';
+import type { Availability, CatalogFilterOption } from '@/types/catalog';
 
 export interface FilterState {
   minPrice: string;
@@ -9,24 +9,23 @@ export interface FilterState {
 
 interface FiltersSidebarProps {
   value: FilterState;
-  materials: string[];
+  materials: CatalogFilterOption[];
   onChange: (value: FilterState) => void;
   onReset: () => void;
 }
 
 const availabilityOptions: Array<{ value: Availability; label: string }> = [
   { value: 'in-stock', label: 'В наличии' },
-  { value: 'made-to-order', label: 'На заказ' },
   { value: 'out-of-stock', label: 'Нет в наличии' },
 ];
 
 export function FiltersSidebar({ value, materials, onChange, onReset }: FiltersSidebarProps) {
-  const toggleMaterial = (material: string) => {
+  const toggleMaterial = (materialId: string) => {
     onChange({
       ...value,
-      materials: value.materials.includes(material)
-        ? value.materials.filter((item) => item !== material)
-        : [...value.materials, material],
+      materials: value.materials.includes(materialId)
+        ? value.materials.filter((item) => item !== materialId)
+        : [...value.materials, materialId],
     });
   };
 
@@ -73,13 +72,13 @@ export function FiltersSidebar({ value, materials, onChange, onReset }: FiltersS
       <div className="filter-group">
         <h3>Материал</h3>
         {materials.map((material) => (
-          <label className="check-row" key={material}>
+          <label className="check-row" key={material.id}>
             <input
               type="checkbox"
-              checked={value.materials.includes(material)}
-              onChange={() => toggleMaterial(material)}
+              checked={value.materials.includes(material.id)}
+              onChange={() => toggleMaterial(material.id)}
             />
-            <span>{material}</span>
+            <span>{material.name}</span>
           </label>
         ))}
       </div>

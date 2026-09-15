@@ -21,6 +21,9 @@ export const useProduct = (slug: string) =>
 export const useCategories = () =>
   useQuery({ queryKey: ['categories'], queryFn: () => catalogService.getCategories() });
 
+export const useCatalogMaterials = () =>
+  useQuery({ queryKey: ['catalog-materials'], queryFn: () => catalogService.getCatalogMaterials() });
+
 export const usePromotions = () =>
   useQuery({ queryKey: ['promotions'], queryFn: () => catalogService.getPromotions() });
 
