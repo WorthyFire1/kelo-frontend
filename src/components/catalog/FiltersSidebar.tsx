@@ -10,6 +10,9 @@ export interface FilterState {
 interface FiltersSidebarProps {
   value: FilterState;
   materials: CatalogFilterOption[];
+  brands: CatalogFilterOption[];
+  brand: string;
+  onBrandChange: (brand: string) => void;
   onChange: (value: FilterState) => void;
   onReset: () => void;
 }
@@ -19,7 +22,7 @@ const availabilityOptions: Array<{ value: Availability; label: string }> = [
   { value: 'out-of-stock', label: 'Нет в наличии' },
 ];
 
-export function FiltersSidebar({ value, materials, onChange, onReset }: FiltersSidebarProps) {
+export function FiltersSidebar({ value, materials, brands, brand, onBrandChange, onChange, onReset }: FiltersSidebarProps) {
   const toggleMaterial = (materialId: string) => {
     onChange({
       ...value,
@@ -81,6 +84,16 @@ export function FiltersSidebar({ value, materials, onChange, onReset }: FiltersS
             <span>{material.name}</span>
           </label>
         ))}
+      </div>
+      <div className="filter-group">
+        <h3>Бренд</h3>
+        <label className="filter-select">
+          <span className="sr-only">Выберите бренд</span>
+          <select value={brand} onChange={(event) => onBrandChange(event.target.value)}>
+            <option value="">Все бренды</option>
+            {brands.map((item) => <option value={item.id} key={item.id}>{item.name} ({item.productCount})</option>)}
+          </select>
+        </label>
       </div>
       <div className="filter-group">
         <h3>Наличие</h3>

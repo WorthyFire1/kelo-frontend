@@ -1,19 +1,19 @@
 import { FileCheck2, MessageSquareText, PackageCheck, PencilRuler } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { Breadcrumbs } from '@/components/ui/Breadcrumbs';
 import { Container } from '@/components/ui/Container';
 import { ImagePlaceholder } from '@/components/ui/ImagePlaceholder';
 import { RequestForm } from '@/components/forms/RequestForm';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { formatPrice } from '@/lib/formatters';
+import { customOrderService } from '@/services/customOrderService';
 
-const steps = [
-  { icon: MessageSquareText, title: 'Обсуждаем идею', text: 'Получаем рисунок, фото или описание и уточняем размер изделия.' },
-  { icon: PencilRuler, title: 'Готовим макет', text: 'Адаптируем детали под резьбу и согласуем визуальный эскиз.' },
-  { icon: FileCheck2, title: 'Делаем образец', text: 'Проверяем глубину, чистоту линий и тестовый отпечаток.' },
-  { icon: PackageCheck, title: 'Изготавливаем заказ', text: 'Финишно шлифуем, покрываем и надёжно упаковываем.' },
-];
+const stepIcons = [MessageSquareText, PencilRuler, FileCheck2, PackageCheck];
 
 export function CustomOrderPage() {
   useDocumentTitle('Столярные изделия на заказ');
+  const infoQuery = useQuery({ queryKey: ['custom-order', 'info'], queryFn: customOrderService.getInfo });
+  const info = infoQuery.data;
 
   return (
     <>
@@ -30,35 +30,33 @@ export function CustomOrderPage() {
         </section>
         <section className="section section--compact">
           <div className="process-grid">
-            {steps.map(({ icon: Icon, title, text }, index) => (
-              <article className="process-step" key={title}>
-                <span>{index + 1}</span>
+            {(info?.steps ?? []).map((step, index) => {
+              const Icon = stepIcons[index] ?? FileCheck2;
+              return (
+              <article className="process-step" key={step.number}>
+                <span>{step.number}</span>
                 <Icon />
-                <h2>{title}</h2>
-                <p>{text}</p>
+                <h2>{step.title}</h2>
+                <p>{step.description}</p>
               </article>
-            ))}
+              );
+            })}
+            {infoQuery.isPending && <p>Загружаем этапы работы…</p>}
           </div>
         </section>
         <section className="custom-info-grid">
           <div>
             <span className="eyebrow">Что можно заказать</span>
             <h2>От одной формы до корпоративной серии</h2>
-            <ul className="check-list">
-              <li>Пряничные доски по рисунку или фотографии</li>
-              <li>Формы с логотипом для кондитерских и брендов</li>
-              <li>Менажницы и сервировочные доски необычной формы</li>
-              <li>Подарочные наборы и упаковку</li>
-              <li>Повторные партии по согласованному макету</li>
-            </ul>
+            <ul className="check-list">{(info?.whatCanOrder ?? []).map((item) => <li key={item}>{item}</li>)}</ul>
           </div>
           <div className="custom-price-card">
             <span>Ориентировочная стоимость</span>
-            <strong>от 5 900 ₽</strong>
+            <strong>{info ? `от ${formatPrice(info.startingPrice)}` : 'Рассчитываем…'}</strong>
             <p>Точная цена зависит от размера, древесины, сложности рисунка и количества изделий.</p>
             <dl>
-              <div><dt>Макет</dt><dd>от 2 дней</dd></div>
-              <div><dt>Производство</dt><dd>10–20 дней</dd></div>
+              <div><dt>Макет</dt><dd>{info ? `от ${info.minMacetDays} дней` : '—'}</dd></div>
+              <div><dt>Производство</dt><dd>{info ? `${info.minProductionDays}–${info.maxProductionDays} дней` : '—'}</dd></div>
               <div><dt>Тираж</dt><dd>от 1 штуки</dd></div>
             </dl>
           </div>

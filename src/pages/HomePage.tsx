@@ -44,7 +44,7 @@ export function HomePage() {
           {homeQuery.isError && (
             <div className="home-api-message" role="alert">
               <strong>Не удалось загрузить данные с сервера</strong>
-              <span>Проверьте подключение к Radmin VPN и доступность backend.</span>
+              <span>Проверьте подключение к интернету и доступность сервера.</span>
               <button className="button button--secondary" type="button" onClick={() => void homeQuery.refetch()}>Повторить</button>
             </div>
           )}

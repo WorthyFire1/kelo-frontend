@@ -1,9 +1,10 @@
 import { Heart, ShoppingBag, Star } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import { formatPrice } from '@/lib/formatters';
-import { useCartStore } from '@/store/useCartStore';
-import { useFavoritesStore } from '@/store/useFavoritesStore';
+import { useAddToCart } from '@/hooks/useCart';
+import { useAddToWishlist, useRemoveFromWishlist, useWishlistQuery } from '@/hooks/useWishlist';
+import { useAuthStore } from '@/store/useAuthStore';
 import type { Product, ProductBadge } from '@/types/catalog';
 import { ImagePlaceholder } from '@/components/ui/ImagePlaceholder';
 
@@ -15,10 +16,39 @@ const badgeLabels: Record<ProductBadge, string> = {
 };
 
 export function ProductCard({ product }: { product: Product }) {
-  const addItem = useCartStore((state) => state.addItem);
-  const favoriteIds = useFavoritesStore((state) => state.productIds);
-  const toggleFavorite = useFavoritesStore((state) => state.toggle);
-  const isFavorite = favoriteIds.includes(product.id);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const user = useAuthStore((state) => state.user);
+  const cartMutation = useAddToCart();
+  const wishlistQuery = useWishlistQuery();
+  const addWishlistMutation = useAddToWishlist();
+  const removeWishlistMutation = useRemoveFromWishlist();
+  const productId = Number(product.id);
+  const isFavorite = wishlistQuery.data?.some((item) => item.productId === productId) ?? false;
+  const favoritePending = addWishlistMutation.isPending || removeWishlistMutation.isPending;
+
+  const requireAuth = () => {
+    if (user) return true;
+    const returnTo = `${location.pathname}${location.search}`;
+    navigate(`/account?returnTo=${encodeURIComponent(returnTo)}`);
+    return false;
+  };
+
+  const addToCart = () => {
+    if (!requireAuth()) return;
+    cartMutation.mutate(
+      { productId, quantity: 1 },
+      { onError: (error) => window.alert(error instanceof Error ? error.message : 'Не удалось добавить товар в корзину.') },
+    );
+  };
+
+  const toggleFavorite = () => {
+    if (!requireAuth()) return;
+    const mutation = isFavorite ? removeWishlistMutation : addWishlistMutation;
+    mutation.mutate(productId, {
+      onError: (error) => window.alert(error instanceof Error ? error.message : 'Не удалось изменить избранное.'),
+    });
+  };
 
   return (
     <article className="product-card">
@@ -36,7 +66,8 @@ export function ProductCard({ product }: { product: Product }) {
         <button
           className={clsx('icon-button', 'product-card__favorite', isFavorite && 'is-active')}
           type="button"
-          onClick={() => toggleFavorite(product.id)}
+          onClick={toggleFavorite}
+          disabled={favoritePending}
           aria-label={isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}
         >
           <Heart size={19} fill={isFavorite ? 'currentColor' : 'none'} />
@@ -61,8 +92,8 @@ export function ProductCard({ product }: { product: Product }) {
           <button
             className="product-card__cart"
             type="button"
-            onClick={() => addItem(product.id)}
-            disabled={product.availability === 'out-of-stock'}
+            onClick={addToCart}
+            disabled={product.availability === 'out-of-stock' || cartMutation.isPending}
             aria-label="Добавить в корзину"
           >
             <ShoppingBag size={19} />

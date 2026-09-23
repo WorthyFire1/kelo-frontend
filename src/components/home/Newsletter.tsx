@@ -9,6 +9,7 @@ export function Newsletter() {
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!email.trim()) return;
+    window.location.href = `mailto:kelo_creates@mail.ru?subject=${encodeURIComponent('Подписка на новости КЕЛО')}&body=${encodeURIComponent(`Прошу добавить адрес ${email.trim()} в рассылку КЕЛО.`)}`;
     setSent(true);
     setEmail('');
   };
@@ -23,7 +24,7 @@ export function Newsletter() {
           <p>Подпишитесь, чтобы первыми увидеть новые коллекции и свободные даты для индивидуальных заказов.</p>
         </div>
         {sent ? (
-          <div className="newsletter__success" role="status">Спасибо! Подписка оформлена в демонстрационном режиме.</div>
+          <div className="newsletter__success" role="status">Заявка подготовлена в почтовой программе. Отправьте письмо для подтверждения подписки.</div>
         ) : (
           <form onSubmit={submit}>
             <label className="sr-only" htmlFor="newsletter-email">Электронная почта</label>

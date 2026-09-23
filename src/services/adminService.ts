@@ -34,6 +34,7 @@ export interface CatalogAdminData {
   total: number;
   page: number;
   pageSize: number;
+  totalPages: number;
 }
 
 export interface AdminOrder {
@@ -90,6 +91,7 @@ export interface AdminOrdersData {
   total: number;
   page: number;
   pageSize: number;
+  totalPages: number;
 }
 
 export interface AdminUser {
@@ -107,6 +109,7 @@ export interface AdminUsersData {
   total: number;
   page: number;
   pageSize: number;
+  totalPages: number;
 }
 
 export interface AdminProductInput {
@@ -343,9 +346,9 @@ export const adminService = {
     return apiRequest<AdminStats>('/admin/stats');
   },
 
-  async getProducts(): Promise<CatalogAdminData> {
-    const data = await apiRequest<CatalogAdminData>('/admin/products?page=1&pageSize=100');
-    return { ...data, products: data.products.map(normalizeProduct) };
+  async getProducts(page = 1, pageSize = 20): Promise<CatalogAdminData> {
+    const data = await apiRequest<Omit<CatalogAdminData, 'totalPages'>>(`/admin/products?page=${page}&pageSize=${pageSize}`);
+    return { ...data, products: data.products.map(normalizeProduct), totalPages: Math.max(1, Math.ceil(data.total / data.pageSize)) };
   },
 
   async getProduct(id: number): Promise<AdminProductDetails> {
@@ -384,10 +387,11 @@ export const adminService = {
     return apiRequest(`/admin/products/${id}`, { method: 'DELETE' });
   },
 
-  getOrders(status?: string): Promise<AdminOrdersData> {
-    const params = new URLSearchParams({ page: '1', pageSize: '100' });
+  async getOrders(status?: string, page = 1, pageSize = 20): Promise<AdminOrdersData> {
+    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
     if (status) params.set('status', status);
-    return apiRequest<AdminOrdersData>(`/admin/orders?${params.toString()}`);
+    const data = await apiRequest<Omit<AdminOrdersData, 'totalPages'>>(`/admin/orders?${params.toString()}`);
+    return { ...data, totalPages: Math.max(1, Math.ceil(data.total / data.pageSize)) };
   },
 
   getOrder(id: number): Promise<AdminOrderDetails> {
@@ -398,8 +402,9 @@ export const adminService = {
     return apiRequest(`/admin/orders/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) });
   },
 
-  getUsers(): Promise<AdminUsersData> {
-    return apiRequest<AdminUsersData>('/admin/users?page=1&pageSize=100');
+  async getUsers(page = 1, pageSize = 20): Promise<AdminUsersData> {
+    const data = await apiRequest<Omit<AdminUsersData, 'totalPages'>>(`/admin/users?page=${page}&pageSize=${pageSize}`);
+    return { ...data, totalPages: Math.max(1, Math.ceil(data.total / data.pageSize)) };
   },
 
   getCategories(): Promise<AdminCategory[]> {
@@ -425,8 +430,8 @@ export const adminService = {
     return apiRequest(`/admin/categories/${id}`, { method: 'DELETE' });
   },
 
-  async getBrands(): Promise<AdminBrandsData> {
-    const data = await apiRequest<Omit<AdminBrandsData, 'brands'> & { brands: Array<Omit<AdminBrand, 'sourceLogoUrl'>> }>('/admin/brands?page=1&pageSize=100');
+  async getBrands(page = 1, pageSize = 20): Promise<AdminBrandsData> {
+    const data = await apiRequest<Omit<AdminBrandsData, 'brands'> & { brands: Array<Omit<AdminBrand, 'sourceLogoUrl'>> }>(`/admin/brands?page=${page}&pageSize=${pageSize}`);
     return { ...data, brands: data.brands.map(normalizeBrand) };
   },
 
@@ -453,9 +458,9 @@ export const adminService = {
     return apiRequest<AdminDiscount[]>('/Discount');
   },
 
-  async getBlogPosts(): Promise<BlogAdminData> {
+  async getBlogPosts(page = 1, pageSize = 20): Promise<BlogAdminData> {
     const [data, categories] = await Promise.all([
-      apiRequest<{ posts: AdminBlogPost[]; total: number; page: number; pageSize: number; totalPages: number }>('/admin/BlogPostsList?page=1&pageSize=100'),
+      apiRequest<{ posts: AdminBlogPost[]; total: number; page: number; pageSize: number; totalPages: number }>(`/admin/BlogPostsList?page=${page}&pageSize=${pageSize}`),
       apiRequest<string[]>('/admin/blog-categories'),
     ]);
     return {

@@ -46,7 +46,8 @@ export function BrandsPage() {
               <div>
                 <h2>{brand.name}</h2>
                 <p>{brand.description}</p>
-                <Link className="text-link" to="/catalog">Перейти к товарам <ArrowRight size={17} /></Link>
+                <small>{brand.productCount} товаров</small>
+                <Link className="text-link" to={`/brands/${brand.slug}`}>Перейти к товарам <ArrowRight size={17} /></Link>
               </div>
             </article>
           ))}

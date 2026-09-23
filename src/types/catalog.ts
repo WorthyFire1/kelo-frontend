@@ -22,6 +22,23 @@ export interface ProductSpecification {
   value: string;
 }
 
+export interface ProductVariant {
+  id: number;
+  name: string;
+  size: string;
+  additionalPrice?: number;
+  stockQuantity: number;
+  sku: string;
+}
+
+export interface ProductReview {
+  id: number;
+  rating: number;
+  comment: string;
+  createdAt: string;
+  userName: string;
+}
+
 export interface Product {
   id: string;
   slug: string;
@@ -31,6 +48,8 @@ export interface Product {
   description: string;
   categoryId: string;
   categoryName: string;
+  brandId?: string;
+  brandName?: string;
   price: number;
   oldPrice?: number;
   images: string[];
@@ -44,6 +63,21 @@ export interface Product {
   rating: number;
   reviewCount: number;
   specifications: ProductSpecification[];
+  variants?: ProductVariant[];
+}
+
+export interface ProductDetails {
+  product: Product;
+  reviews: ProductReview[];
+  relatedProducts: Product[];
+}
+
+export interface CatalogPageResult {
+  products: Product[];
+  totalItems: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export interface Promotion {
@@ -69,12 +103,22 @@ export interface Article {
   image?: string;
 }
 
+export interface ArticlePageResult {
+  articles: Article[];
+  categories: string[];
+  totalItems: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export interface Brand {
   id: string;
   slug: string;
   name: string;
   description: string;
   image?: string;
+  productCount: number;
 }
 
 export interface HomeAdvantage {
@@ -100,46 +144,11 @@ export interface HomeData {
 export interface CatalogFilters {
   query?: string;
   category?: string;
+  brand?: string;
   materials?: string[];
   availability?: Availability[];
   minPrice?: number;
   maxPrice?: number;
   badge?: ProductBadge;
   sort?: 'popular' | 'price-asc' | 'price-desc' | 'newest' | 'rating';
-}
-
-export interface OrderCustomer {
-  firstName: string;
-  lastName: string;
-  phone: string;
-  email: string;
-}
-
-export interface OrderDelivery {
-  method: 'cdek' | 'post' | 'courier' | 'pickup';
-  city: string;
-  address: string;
-  comment?: string;
-}
-
-export interface OrderItem {
-  productId: string;
-  quantity: number;
-  price: number;
-}
-
-export interface CreateOrderRequest {
-  customer: OrderCustomer;
-  delivery: OrderDelivery;
-  paymentMethod: 'card' | 'on-delivery' | 'invoice';
-  items: OrderItem[];
-  promoCode?: string;
-}
-
-export interface CreatedOrder {
-  id: string;
-  number: string;
-  status: 'created';
-  total: number;
-  createdAt: string;
 }

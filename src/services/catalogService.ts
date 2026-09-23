@@ -1,20 +1,21 @@
 import { apiRequest, resolveApiAssetUrl } from '@/api/client';
-import { promotions } from '@/data/mockData';
 import type {
   Article,
+  ArticlePageResult,
   Brand,
+  CatalogPageResult,
   CatalogFilterOption,
   CatalogFilters,
   Category,
   HomeAdvantage,
   HomeData,
   Product,
+  ProductDetails,
+  ProductReview,
   Promotion,
 } from '@/types/catalog';
 
-const useContentMocks = import.meta.env.VITE_USE_MOCKS !== 'false';
-const delay = (ms = 180) => new Promise((resolve) => window.setTimeout(resolve, ms));
-const catalogPageSize = 1000;
+const defaultCatalogPageSize = 12;
 
 interface ApiProductDto {
   id: number;
@@ -32,6 +33,7 @@ interface ApiProductDto {
   slug: string;
   materialName?: string | null;
   brandName?: string | null;
+  brandId?: number | null;
   categoryId?: number | null;
   categoryName?: string | null;
 }
@@ -77,13 +79,35 @@ interface ApiProductFullDto extends ApiProductDto {
   images?: string[] | null;
   specifications?: Record<string, string> | null;
   tags?: string[] | null;
+  variants?: Array<{
+    id: number;
+    name: string;
+    size: string;
+    additionalPrice?: number | null;
+    stockQuantity: number;
+    sku: string;
+  }> | null;
 }
 
 interface ApiProductDetailsResponseDto {
   product: ApiProductFullDto;
   averageRating: number;
   reviewCount: number;
+  reviews?: ProductReview[];
   relatedProducts?: ApiProductDto[];
+}
+
+interface ApiDiscountDto {
+  id: number;
+  code: string;
+  name: string;
+  description?: string | null;
+  type: string;
+  amount: number;
+  minOrderAmount?: number | null;
+  validFrom?: string | null;
+  validTo?: string | null;
+  isActive: boolean;
 }
 
 interface HomeResponseDto {
@@ -168,6 +192,7 @@ function mapBrand(brand: ApiBrandDto): Brand {
     name: brand.name,
     description: brand.description ?? '',
     image: resolveApiAssetUrl(brand.logoUrl),
+    productCount: brand.productCount,
   };
 }
 
@@ -215,6 +240,8 @@ function mapProduct(product: ApiProductDto, categories: Category[], details?: Ap
     description: details?.fullDescription || product.shortDescription || '',
     categoryId: product.categoryId ? String(product.categoryId) : category?.id ?? '',
     categoryName: product.categoryName || category?.name || 'Каталог КЕЛО',
+    brandId: product.brandId ? String(product.brandId) : undefined,
+    brandName: product.brandName ?? undefined,
     price: product.price,
     oldPrice: product.oldPrice ?? undefined,
     images,
@@ -228,18 +255,32 @@ function mapProduct(product: ApiProductDto, categories: Category[], details?: Ap
     rating: product.averageRating,
     reviewCount: product.reviewCount,
     specifications,
+    variants: (details?.variants ?? []).map((variant) => ({
+      id: variant.id,
+      name: variant.name,
+      size: variant.size,
+      additionalPrice: variant.additionalPrice ?? undefined,
+      stockQuantity: variant.stockQuantity,
+      sku: variant.sku,
+    })),
   };
 }
 
-function createCatalogParams(filters: CatalogFilters, materialId?: number): URLSearchParams {
+function createCatalogParams(
+  filters: CatalogFilters,
+  page: number,
+  pageSize: number,
+  materialId?: number,
+): URLSearchParams {
   const params = new URLSearchParams({
-    Page: '1',
-    PageSize: String(catalogPageSize),
+    Page: String(page),
+    PageSize: String(pageSize),
     SortBy: sortValues[filters.sort ?? 'popular'],
   });
 
   if (filters.query?.trim()) params.set('SearchTerm', filters.query.trim());
   if (filters.category) params.set('CategoryId', filters.category);
+  if (filters.brand) params.set('BrandId', filters.brand);
   if (materialId) params.set('MaterialId', String(materialId));
   if (typeof filters.minPrice === 'number') params.set('MinPrice', String(filters.minPrice));
   if (typeof filters.maxPrice === 'number') params.set('MaxPrice', String(filters.maxPrice));
@@ -289,11 +330,27 @@ export const catalogService = {
     };
   },
 
-  async getProducts(filters: CatalogFilters = {}): Promise<Product[]> {
+  async getCatalogPage(
+    filters: CatalogFilters = {},
+    page = 1,
+    pageSize = defaultCatalogPageSize,
+  ): Promise<CatalogPageResult> {
     const materialIds = (filters.materials ?? [])
       .map(Number)
       .filter((id) => Number.isInteger(id) && id > 0);
-    const params = createCatalogParams(filters, materialIds.length === 1 ? materialIds[0] : undefined);
+
+    const requiresClientPagination = filters.sort === 'popular'
+      || materialIds.length > 1
+      || filters.availability?.includes('out-of-stock')
+      || Boolean(filters.badge);
+    const requestPage = requiresClientPagination ? 1 : page;
+    const requestPageSize = requiresClientPagination ? 1000 : pageSize;
+    const params = createCatalogParams(
+      filters,
+      requestPage,
+      requestPageSize,
+      materialIds.length === 1 ? materialIds[0] : undefined,
+    );
     const [response, categoriesResponse] = await Promise.all([
       apiRequest<ApiCatalogResponseDto>('/Catalog/products?' + params.toString()),
       fetchCategories(),
@@ -318,16 +375,40 @@ export const catalogService = {
       result = result.filter((product) => product.badges.includes(filters.badge!));
     }
 
-    return sortProducts(result, filters.sort);
+    result = sortProducts(result, filters.sort);
+
+    if (!requiresClientPagination) {
+      return {
+        products: result,
+        totalItems: response.totalItems,
+        page: response.page,
+        pageSize: response.pageSize,
+        totalPages: response.totalPages,
+      };
+    }
+
+    const start = (page - 1) * pageSize;
+    return {
+      products: result.slice(start, start + pageSize),
+      totalItems: result.length,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(result.length / pageSize)),
+    };
   },
 
-  async getProductBySlug(slug: string): Promise<Product | undefined> {
+  async getProducts(filters: CatalogFilters = {}): Promise<Product[]> {
+    const result = await catalogService.getCatalogPage(filters, 1, 100);
+    return result.products;
+  },
+
+  async getProductBySlug(slug: string): Promise<ProductDetails> {
     const [response, categoriesResponse] = await Promise.all([
       apiRequest<ApiProductDetailsResponseDto>('/Product/' + encodeURIComponent(slug)),
       fetchCategories(),
     ]);
 
-    return mapProduct(
+    const product = mapProduct(
       {
         ...response.product,
         averageRating: response.averageRating,
@@ -336,6 +417,12 @@ export const catalogService = {
       categoriesResponse,
       response.product,
     );
+
+    return {
+      product,
+      reviews: response.reviews ?? [],
+      relatedProducts: (response.relatedProducts ?? []).map((item) => mapProduct(item, categoriesResponse)),
+    };
   },
 
   async getCategories(): Promise<Category[]> {
@@ -352,14 +439,35 @@ export const catalogService = {
   },
 
   async getPromotions(): Promise<Promotion[]> {
-    if (!useContentMocks) return apiRequest<Promotion[]>('/promotions');
-    await delay(100);
-    return promotions;
+    const discounts = await apiRequest<ApiDiscountDto[]>('/Discount');
+    return discounts.map((discount) => ({
+      id: String(discount.id),
+      slug: discount.code.toLocaleLowerCase('ru-RU'),
+      title: discount.name,
+      description: discount.description ?? '',
+      label: discount.type === 'Percentage' ? `−${discount.amount}%` : `−${discount.amount} ₽`,
+      validUntil: discount.validTo ? formatArticleDate(discount.validTo) : 'без ограничения срока',
+      productIds: [],
+    }));
   },
 
   async getArticles(): Promise<Article[]> {
-    const response = await apiRequest<ApiBlogListResponseDto>('/Blog?page=1&pageSize=1000');
-    return (response.posts ?? []).map(mapArticle);
+    const response = await catalogService.getArticlesPage(1, 3);
+    return response.articles;
+  },
+
+  async getArticlesPage(page = 1, pageSize = 9, category?: string): Promise<ArticlePageResult> {
+    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+    if (category) params.set('category', category);
+    const response = await apiRequest<ApiBlogListResponseDto>('/Blog?' + params.toString());
+    return {
+      articles: (response.posts ?? []).map(mapArticle),
+      categories: response.categories ?? [],
+      totalItems: response.totalPosts,
+      page: response.page,
+      pageSize: response.pageSize,
+      totalPages: response.totalPages,
+    };
   },
 
   async getArticleBySlug(slug: string): Promise<Article> {
@@ -370,5 +478,17 @@ export const catalogService = {
   async getBrands(): Promise<Brand[]> {
     const response = await apiRequest<ApiBrandDto[]>('/Brand');
     return response.map(mapBrand);
+  },
+
+  async getBrandBySlug(slug: string): Promise<Brand> {
+    const response = await apiRequest<ApiBrandDto>('/Brand/' + encodeURIComponent(slug));
+    return mapBrand(response);
+  },
+
+  async addProductReview(productId: string, rating: number, comment: string): Promise<{ message: string }> {
+    return apiRequest<{ message: string }>(`/Product/${productId}/reviews`, {
+      method: 'POST',
+      body: JSON.stringify({ rating, comment }),
+    });
   },
 };

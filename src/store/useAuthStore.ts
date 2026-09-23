@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { authTokenStorage } from '@/lib/authTokenStorage';
+import { AUTH_UNAUTHORIZED_EVENT, authTokenStorage } from '@/lib/authTokenStorage';
 import { getJwtRoles } from '@/lib/jwt';
 import type { AuthResponse } from '@/services/authService';
 
@@ -61,3 +61,7 @@ export const useAuthStore = create<AuthState>()(
     { name: 'kelo-auth', version: 2 },
   ),
 );
+
+window.addEventListener(AUTH_UNAUTHORIZED_EVENT, () => {
+  useAuthStore.getState().logout();
+});

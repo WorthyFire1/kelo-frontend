@@ -1,6 +1,10 @@
 import { useState, type FormEvent } from 'react';
 import { CheckCircle2, LoaderCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ApiError } from '@/api/client';
 import { feedbackService, type FeedbackRequest } from '@/services/feedbackService';
+import { customOrderService } from '@/services/customOrderService';
+import { useAuthStore } from '@/store/useAuthStore';
 import { Button } from '@/components/ui/Button';
 
 interface RequestFormProps {
@@ -10,8 +14,10 @@ interface RequestFormProps {
 }
 
 export function RequestForm({ kind, title, submitLabel = 'Отправить заявку' }: RequestFormProps) {
+  const user = useAuthStore((state) => state.user);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const [error, setError] = useState('');
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -22,17 +28,28 @@ export function RequestForm({ kind, title, submitLabel = 'Отправить з�
     const formData = new FormData(event.currentTarget);
 
     try {
-      await feedbackService.send({
-        name: String(formData.get('name') ?? ''),
-        phone: String(formData.get('phone') ?? ''),
-        email: String(formData.get('email') ?? ''),
-        message: String(formData.get('message') ?? ''),
-        kind,
-      });
+      const request = {
+        name: String(formData.get('name') ?? '').trim(),
+        phone: String(formData.get('phone') ?? '').trim(),
+        email: String(formData.get('email') ?? '').trim(),
+        message: String(formData.get('message') ?? '').trim(),
+      };
+      if (kind === 'custom-order') {
+        const response = await customOrderService.create({
+          name: request.name,
+          phone: request.phone,
+          email: request.email || undefined,
+          description: request.message,
+        });
+        setSuccessMessage(response.message);
+      } else {
+        await feedbackService.send({ ...request, kind });
+        setSuccessMessage('Сообщение подготовлено в вашей почтовой программе. Отправьте письмо, чтобы мы его получили.');
+      }
       setSuccess(true);
       form.reset();
-    } catch {
-      setError('Не удалось отправить форму. Попробуйте ещё раз.');
+    } catch (requestError) {
+      setError(requestError instanceof ApiError ? requestError.message : 'Не удалось отправить форму. Попробуйте ещё раз.');
     } finally {
       setLoading(false);
     }
@@ -43,8 +60,18 @@ export function RequestForm({ kind, title, submitLabel = 'Отправить з�
       <div className="form-success" role="status">
         <CheckCircle2 size={38} />
         <h3>Заявка принята</h3>
-        <p>Сейчас форма работает на тестовых данных. После подключения бэкенда заявка будет отправляться менеджеру.</p>
+        <p>{successMessage}</p>
         <Button variant="secondary" type="button" onClick={() => setSuccess(false)}>Отправить ещё одну</Button>
+      </div>
+    );
+  }
+
+  if (kind === 'custom-order' && !user) {
+    return (
+      <div className="form-success">
+        <h3>Войдите, чтобы отправить заявку</h3>
+        <p>Backend привязывает индивидуальный заказ к учётной записи. После входа заявка и её статус появятся в личном кабинете.</p>
+        <Link className="button button--primary" to="/account?returnTo=%2Fcustom-order%23custom-form">Войти или зарегистрироваться</Link>
       </div>
     );
   }
@@ -62,8 +89,8 @@ export function RequestForm({ kind, title, submitLabel = 'Отправить з�
           <input name="phone" type="tel" required placeholder="+7 900 000-00-00" />
         </label>
         <label className="form-grid__wide">
-          <span>E-mail</span>
-          <input name="email" type="email" placeholder="mail@example.ru" />
+          <span>E-mail{kind === 'custom-order' ? ' *' : ''}</span>
+          <input name="email" type="email" required={kind === 'custom-order'} defaultValue={kind === 'custom-order' ? user?.email : ''} placeholder="mail@example.ru" />
         </label>
         <label className="form-grid__wide">
           <span>Комментарий *</span>

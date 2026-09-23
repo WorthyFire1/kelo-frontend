@@ -2,6 +2,7 @@ import { ArrowRight, Tag } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Breadcrumbs } from '@/components/ui/Breadcrumbs';
 import { Container } from '@/components/ui/Container';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { ImagePlaceholder } from '@/components/ui/ImagePlaceholder';
 import { usePromotions } from '@/hooks/useCatalog';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
@@ -19,7 +20,7 @@ export function PromotionsPage() {
           <h1>Акции КЕЛО</h1>
           <p>Скидки на наборы, доставку и индивидуальное производство.</p>
         </div>
-        <div className="heading-note"><Tag /><span>Часть специальных условий будет доступна зарегистрированным покупателям после подключения бэкенда.</span></div>
+        <div className="heading-note"><Tag /><span>Здесь отображаются активные скидки и промокоды из системы КЕЛО.</span></div>
       </div>
       <div className="promotion-list">
         {promotionsQuery.data?.map((promotion) => (
@@ -34,7 +35,10 @@ export function PromotionsPage() {
             </div>
           </article>
         ))}
+        {promotionsQuery.isLoading && <p>Загружаем действующие предложения…</p>}
       </div>
+      {promotionsQuery.isError && <EmptyState icon={<Tag />} title="Не удалось загрузить акции" description={promotionsQuery.error instanceof Error ? promotionsQuery.error.message : 'Повторите запрос.'} action={<button className="button button--primary" type="button" onClick={() => void promotionsQuery.refetch()}>Повторить</button>} />}
+      {promotionsQuery.isSuccess && !promotionsQuery.data.length && <EmptyState icon={<Tag />} title="Активных акций пока нет" description="Новые предложения появятся здесь автоматически." />}
     </Container>
   );
 }

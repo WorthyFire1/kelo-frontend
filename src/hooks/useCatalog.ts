@@ -11,6 +11,12 @@ export const useProducts = (filters: CatalogFilters = {}) =>
     queryFn: () => catalogService.getProducts(filters),
   });
 
+export const useCatalogPage = (filters: CatalogFilters = {}, page = 1, pageSize = 12) =>
+  useQuery({
+    queryKey: ['catalog-page', filters, page, pageSize],
+    queryFn: () => catalogService.getCatalogPage(filters, page, pageSize),
+  });
+
 export const useProduct = (slug: string) =>
   useQuery({
     queryKey: ['product', slug],
@@ -30,6 +36,12 @@ export const usePromotions = () =>
 export const useArticles = () =>
   useQuery({ queryKey: ['articles'], queryFn: () => catalogService.getArticles() });
 
+export const useArticlePage = (page = 1, pageSize = 9, category?: string) =>
+  useQuery({
+    queryKey: ['article-page', page, pageSize, category],
+    queryFn: () => catalogService.getArticlesPage(page, pageSize, category),
+  });
+
 export const useArticle = (slug: string) =>
   useQuery({
     queryKey: ['article', slug],
@@ -39,3 +51,10 @@ export const useArticle = (slug: string) =>
 
 export const useBrands = () =>
   useQuery({ queryKey: ['brands'], queryFn: () => catalogService.getBrands() });
+
+export const useBrand = (slug: string) =>
+  useQuery({
+    queryKey: ['brand', slug],
+    queryFn: () => catalogService.getBrandBySlug(slug),
+    enabled: Boolean(slug),
+  });

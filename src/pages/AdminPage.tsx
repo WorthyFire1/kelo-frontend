@@ -27,6 +27,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AdminBlogSection, AdminBrandsSection, AdminCategoriesSection, AdminOrdersSection } from '@/components/admin/AdminResourceSections';
+import { Pagination } from '@/components/ui/Pagination';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { adminService, type AdminProduct, type AdminProductDetails } from '@/services/adminService';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -148,12 +149,14 @@ export function AdminPage() {
   const [section, setSection] = useState<AdminSection>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [productSearch, setProductSearch] = useState('');
+  const [productPage, setProductPage] = useState(1);
+  const [usersPage, setUsersPage] = useState(1);
   const [productFormOpen, setProductFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<AdminProductDetails | null>(null);
 
   const dashboardQuery = useQuery({ queryKey: ['admin', 'stats'], queryFn: adminService.getStats, enabled: section === 'overview' });
-  const productsQuery = useQuery({ queryKey: ['admin', 'products'], queryFn: adminService.getProducts, enabled: section === 'overview' || section === 'products' });
-  const usersQuery = useQuery({ queryKey: ['admin', 'users'], queryFn: adminService.getUsers, enabled: section === 'users' });
+  const productsQuery = useQuery({ queryKey: ['admin', 'products', productPage], queryFn: () => adminService.getProducts(productPage), enabled: section === 'overview' || section === 'products' });
+  const usersQuery = useQuery({ queryKey: ['admin', 'users', usersPage], queryFn: () => adminService.getUsers(usersPage), enabled: section === 'users' });
   const discountsQuery = useQuery({ queryKey: ['admin', 'discounts'], queryFn: adminService.getDiscounts, enabled: section === 'discounts' });
   const productOptionsQuery = useQuery({ queryKey: ['admin', 'product-options'], queryFn: adminService.getProductOptions, enabled: productFormOpen });
 
@@ -202,6 +205,8 @@ export function AdminPage() {
   }, [productSearch, productsQuery.data]);
 
   const selectSection = (nextSection: AdminSection) => {
+    if (nextSection === 'overview' || nextSection === 'products') setProductPage(1);
+    if (nextSection === 'users') setUsersPage(1);
     setSection(nextSection);
     setSidebarOpen(false);
   };
@@ -338,6 +343,7 @@ export function AdminPage() {
               <div className="admin-toolbar"><label><Search size={18} /><input value={productSearch} onChange={(event) => setProductSearch(event.target.value)} placeholder="Название, категория или ID" /></label><button type="button" onClick={() => void productsQuery.refetch()}><RefreshCw size={17} /> Обновить</button></div>
               <QueryState isPending={productsQuery.isPending} isError={productsQuery.isError} onRetry={() => void productsQuery.refetch()} />
               {productsQuery.data && <ProductTable products={filteredProducts} onEdit={openEditProduct} onDelete={deleteProduct} editingId={loadProductMutation.variables} deletingId={deleteProductMutation.variables} />}
+              {productsQuery.data && <Pagination page={productPage} totalPages={productsQuery.data.totalPages} onChange={setProductPage} />}
               {loadProductMutation.isError && <div className="admin-mutation-error">{getErrorMessage(loadProductMutation.error, 'Не удалось загрузить товар для редактирования.')}</div>}
               {deleteProductMutation.isError && <div className="admin-mutation-error">{getErrorMessage(deleteProductMutation.error, 'Не удалось удалить товар.')}</div>}
             </section>
@@ -353,6 +359,7 @@ export function AdminPage() {
                 {usersQuery.data.users.map((customer) => <tr key={customer.id}><td><div className="admin-user-cell"><span>{customer.firstName?.slice(0, 1) || customer.email.slice(0, 1)}</span><div><strong>{`${customer.firstName ?? ''} ${customer.lastName ?? ''}`.trim() || 'Без имени'}</strong><small>ID {customer.id}</small></div></div></td><td>{customer.email}</td><td>{customer.phoneNumber || '—'}</td><td>{formatDate(customer.createdAt)}</td><td>{customer.lastLoginAt ? formatDate(customer.lastLoginAt) : 'Ещё не входил'}</td></tr>)}
                 {!usersQuery.data.users.length && <tr><td className="admin-table-empty" colSpan={5}>Пользователей пока нет.</td></tr>}
               </tbody></table></div>}
+              {usersQuery.data && <Pagination page={usersPage} totalPages={usersQuery.data.totalPages} onChange={setUsersPage} />}
             </section>
           )}
           {section === 'categories' && <AdminCategoriesSection />}
@@ -391,7 +398,7 @@ export function AdminPage() {
                 <label><span>Себестоимость, ₽</span><input name="costPrice" type="number" min="0" step="0.01" defaultValue={editingProduct?.costPrice ?? ''} /></label>
                 <label><span>Остаток, шт.</span><input name="stockQuantity" type="number" required min="0" step="1" defaultValue={editingProduct?.stockQuantity ?? ''} /></label>
                 <label><span>Порог малого остатка</span><input name="lowStockThreshold" type="number" min="0" step="1" defaultValue={editingProduct?.lowStockThreshold ?? ''} /></label>
-                <label><span>Артикул</span><input name="sku" maxLength={100} defaultValue={editingProduct?.sku ?? ''} /></label>
+                <label><span>Артикул</span><input name="sku" required maxLength={100} defaultValue={editingProduct?.sku ?? ''} /></label>
                 <label><span>Категория</span><select name="categoryId" required defaultValue={editingProduct?.categoryId ?? ''}><option value="">Выберите категорию</option>{productOptionsQuery.data?.categories.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
                 <label><span>Бренд</span><select name="brandId" required defaultValue={editingProduct?.brandId ?? ''}><option value="">Выберите бренд</option>{productOptionsQuery.data?.brands.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
                 <label><span>Материал</span><select name="materialId" required defaultValue={editingProduct?.materialId ?? ''}><option value="">Выберите материал</option>{productOptionsQuery.data?.materials.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>

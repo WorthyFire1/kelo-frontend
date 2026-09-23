@@ -1,6 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BookOpen, Eye, Image, Pencil, Plus, RefreshCw, Tags, Trash2, X } from 'lucide-react';
+import { Pagination } from '@/components/ui/Pagination';
 import {
   adminService,
   type AdminBlogPost,
@@ -71,10 +72,11 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 export function AdminOrdersSection() {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState('');
+  const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const ordersQuery = useQuery({
-    queryKey: ['admin', 'orders', status],
-    queryFn: () => adminService.getOrders(status),
+    queryKey: ['admin', 'orders', status, page],
+    queryFn: () => adminService.getOrders(status, page),
   });
   const orderQuery = useQuery({
     queryKey: ['admin', 'order', selectedId],
@@ -97,7 +99,7 @@ export function AdminOrdersSection() {
       <section className="admin-panel-card">
         <div className="admin-section-heading">
           <div><span className="admin-kicker">Продажи</span><h2>Все заказы</h2><p>{ordersQuery.data ? `${ordersQuery.data.total} заказов в backend` : 'Очередь заказов магазина'}</p></div>
-          <label className="admin-status-filter"><span>Статус</span><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Все</option>{orderStatuses.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+          <label className="admin-status-filter"><span>Статус</span><select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }}><option value="">Все</option>{orderStatuses.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
         </div>
         <ResourceState pending={ordersQuery.isPending} error={ordersQuery.isError} retry={() => void ordersQuery.refetch()} />
         {ordersQuery.data && (
@@ -118,6 +120,7 @@ export function AdminOrdersSection() {
             </table>
           </div>
         )}
+        {ordersQuery.data && <Pagination page={page} totalPages={ordersQuery.data.totalPages} onChange={setPage} />}
         {updateMutation.isError && <div className="admin-mutation-error">{getErrorMessage(updateMutation.error, 'Статус не сохранён.')}</div>}
       </section>
 
@@ -226,7 +229,8 @@ export function AdminBrandsSection() {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<AdminBrand | 'new' | null>(null);
   const [logoSelected, setLogoSelected] = useState(false);
-  const query = useQuery({ queryKey: ['admin', 'brands'], queryFn: adminService.getBrands });
+  const [page, setPage] = useState(1);
+  const query = useQuery({ queryKey: ['admin', 'brands', page], queryFn: () => adminService.getBrands(page) });
   const loadMutation = useMutation({
     mutationFn: adminService.getBrand,
     onSuccess: (brand) => {
@@ -267,7 +271,7 @@ export function AdminBrandsSection() {
         input: {
           name: String(data.get('name') ?? '').trim(),
           description: String(data.get('description') ?? '').trim(),
-          isActive: data.get('isActive') === 'on',
+          isActive: true,
           logo,
           logoUrl: editing === 'new' || editing === null ? null : editing.sourceLogoUrl,
           removeLogo: data.get('removeLogo') === 'on' && !logo,
@@ -287,6 +291,7 @@ export function AdminBrandsSection() {
           {query.data.brands.map((brand) => <tr key={brand.id}><td><div className="admin-product-cell">{brand.logoUrl ? <img src={brand.logoUrl} alt="" /> : <span>{brand.name.slice(0, 1)}</span>}<div><strong>{brand.name}</strong><small>{brand.description || 'Без описания'}</small></div></div></td><td><code>{brand.slug}</code></td><td>{brand.productCount}</td><td><div className="admin-row-actions"><button className="admin-row-action" type="button" disabled={loadMutation.isPending} onClick={() => loadMutation.mutate(brand.id)} aria-label="Редактировать"><Pencil size={16} /></button><button className="admin-row-action is-danger" type="button" disabled={deleteMutation.isPending} onClick={() => window.confirm(`Удалить бренд «${brand.name}»?`) && deleteMutation.mutate(brand.id)} aria-label="Удалить"><Trash2 size={16} /></button></div></td></tr>)}
           {!query.data.brands.length && <tr><td className="admin-table-empty" colSpan={4}>Брендов пока нет.</td></tr>}
         </tbody></table></div>}
+        {query.data && <Pagination page={page} totalPages={query.data.totalPages} onChange={setPage} />}
         {(loadMutation.isError || deleteMutation.isError) && <div className="admin-mutation-error">{getErrorMessage(loadMutation.error ?? deleteMutation.error, 'Операция с брендом не выполнена.')}</div>}
       </section>
       {editing && <Modal title={editing === 'new' ? 'Новый бренд' : 'Редактирование бренда'} onClose={() => { setLogoSelected(false); setEditing(null); }}>
@@ -296,10 +301,7 @@ export function AdminBrandsSection() {
             <label className="admin-form-wide"><span>Описание</span><textarea name="description" maxLength={500} rows={4} defaultValue={editing === 'new' ? '' : editing.description ?? ''} /></label>
             <label className="admin-form-wide"><span>Логотип{editing === 'new' ? ' *' : ''}</span><input name="logo" type="file" required={editing === 'new'} accept="image/jpeg,image/png,image/gif,image/webp" onChange={(event) => setLogoSelected(Boolean(event.target.files?.length))} /><small>{editing === 'new' ? 'Обязательное поле. ' : ''}JPG, PNG, GIF или WebP, не более 5 МБ.</small></label>
           </div>
-          <div className="admin-check-grid">
-            <label><input name="isActive" type="checkbox" defaultChecked={editing === 'new' ? true : editing.isActive} /> Активен</label>
-            {editing !== 'new' && editing.logoUrl && <label><input name="removeLogo" type="checkbox" /> Удалить текущий логотип</label>}
-          </div>
+          {editing !== 'new' && editing.logoUrl && <div className="admin-check-grid"><label><input name="removeLogo" type="checkbox" /> Удалить текущий логотип</label></div>}
           {saveMutation.isError && <div className="admin-mutation-error">{getErrorMessage(saveMutation.error, 'Бренд не сохранён.')}</div>}
           <div className="admin-modal__actions"><button type="button" onClick={() => { setLogoSelected(false); setEditing(null); }}>Отмена</button><button type="submit" disabled={saveMutation.isPending || (editing === 'new' && !logoSelected)}>{saveMutation.isPending ? 'Сохраняем...' : 'Сохранить'}</button></div>
         </form>
@@ -311,7 +313,8 @@ export function AdminBrandsSection() {
 export function AdminBlogSection() {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<AdminBlogPost | 'new' | null>(null);
-  const query = useQuery({ queryKey: ['admin', 'blog'], queryFn: adminService.getBlogPosts });
+  const [page, setPage] = useState(1);
+  const query = useQuery({ queryKey: ['admin', 'blog', page], queryFn: () => adminService.getBlogPosts(page) });
   const loadMutation = useMutation({ mutationFn: adminService.getBlogPost, onSuccess: setEditing });
   const saveMutation = useMutation({
     mutationFn: ({ id, input }: { id?: number; input: Parameters<typeof adminService.createBlogPost>[0] }) => id ? adminService.updateBlogPost(id, input) : adminService.createBlogPost(input),
@@ -366,6 +369,7 @@ export function AdminBlogSection() {
           {query.data.posts.map((post) => <tr key={post.id}><td><div className="admin-post-cell"><span>{post.featuredImageUrl ? <Image size={18} /> : <BookOpen size={18} />}</span><div><strong>{post.title}</strong><small>/{post.slug} · {post.readTimeMinutes} мин.</small></div></div></td><td>{post.category || 'Без категории'}</td><td>{formatDate(post.publishedAt)}</td><td><span className={`admin-badge ${post.isPublished ? 'is-success' : 'is-muted'}`}>{post.isPublished ? 'Опубликована' : 'Черновик'}</span></td><td><div className="admin-row-actions"><button className="admin-row-action" type="button" disabled={loadMutation.isPending} onClick={() => loadMutation.mutate(post.id)} aria-label="Редактировать"><Pencil size={16} /></button><button className="admin-row-action is-danger" type="button" disabled={deleteMutation.isPending} onClick={() => window.confirm(`Удалить статью «${post.title}»?`) && deleteMutation.mutate(post.id)} aria-label="Удалить"><Trash2 size={16} /></button></div></td></tr>)}
           {!query.data.posts.length && <tr><td className="admin-table-empty" colSpan={5}>Публикаций пока нет.</td></tr>}
         </tbody></table></div>}
+        {query.data && <Pagination page={page} totalPages={query.data.totalPages} onChange={setPage} />}
         {(loadMutation.isError || deleteMutation.isError) && <div className="admin-mutation-error">{getErrorMessage(loadMutation.error ?? deleteMutation.error, 'Операция со статьёй не выполнена.')}</div>}
       </section>
       {editing && <Modal title={editing === 'new' ? 'Новая статья' : 'Редактирование статьи'} onClose={() => setEditing(null)}>
@@ -374,7 +378,7 @@ export function AdminBlogSection() {
             <label className="admin-form-wide"><span>Заголовок</span><input name="title" required maxLength={200} defaultValue={editing === 'new' ? '' : editing.title} /></label>
             <label><span>Категория</span><select name="category" required defaultValue={editing === 'new' ? query.data?.categories[0] ?? '' : editing.category ?? ''}><option value="">Выберите категорию</option>{query.data?.categories.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
             <label><span>Время чтения, мин.</span><input name="readTimeMinutes" type="number" min="1" defaultValue={editing === 'new' ? 5 : editing.readTimeMinutes} /></label>
-            <label className="admin-form-wide"><span>Краткое описание</span><textarea name="shortDescription" maxLength={500} rows={3} defaultValue={editing === 'new' ? '' : editing.shortDescription ?? ''} /></label>
+            <label className="admin-form-wide"><span>Краткое описание</span><textarea name="shortDescription" required maxLength={500} rows={3} defaultValue={editing === 'new' ? '' : editing.shortDescription ?? ''} /></label>
             <label className="admin-form-wide"><span>Текст статьи</span><textarea name="content" required rows={10} defaultValue={editing === 'new' ? '' : editing.content} /></label>
             <label className="admin-form-wide"><span><Tags size={14} /> Теги через запятую</span><input name="tags" defaultValue={editing === 'new' ? '' : editing.tags.join(', ')} /></label>
             <label className="admin-form-wide"><span>Обложка</span><input name="featuredImage" type="file" accept="image/jpeg,image/png,image/gif,image/webp" /><small>JPG, PNG, GIF или WebP, не более 5 МБ.</small></label>

@@ -7,7 +7,8 @@ import { Breadcrumbs } from '@/components/ui/Breadcrumbs';
 import { Container } from '@/components/ui/Container';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingGrid } from '@/components/ui/LoadingGrid';
-import { useCatalogMaterials, useCategories, useProducts } from '@/hooks/useCatalog';
+import { Pagination } from '@/components/ui/Pagination';
+import { useBrands, useCatalogMaterials, useCatalogPage, useCategories } from '@/hooks/useCatalog';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import type { CatalogFilters } from '@/types/catalog';
 
@@ -24,33 +25,52 @@ export function CatalogPage() {
   const [filters, setFilters] = useState<FilterState>(defaultFilterState);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const categoryId = searchParams.get('category') ?? '';
+  const brandId = searchParams.get('brand') ?? '';
   const query = searchParams.get('q') ?? '';
   const sort = (searchParams.get('sort') as CatalogFilters['sort']) ?? 'popular';
+  const requestedPage = Number(searchParams.get('page') ?? '1');
+  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const categoriesQuery = useCategories();
   const materialsQuery = useCatalogMaterials();
+  const brandsQuery = useBrands();
 
   const requestFilters: CatalogFilters = useMemo(() => ({
     query,
     category: categoryId || undefined,
+    brand: brandId || undefined,
     materials: filters.materials,
     availability: filters.availability,
     minPrice: filters.minPrice ? Number(filters.minPrice) : undefined,
     maxPrice: filters.maxPrice ? Number(filters.maxPrice) : undefined,
     sort,
-  }), [query, categoryId, filters, sort]);
+  }), [query, categoryId, brandId, filters, sort]);
 
-  const productsQuery = useProducts(requestFilters);
+  const productsQuery = useCatalogPage(requestFilters, page, 12);
   const materials = materialsQuery.data ?? [];
+  const brands = (brandsQuery.data ?? []).map((brand) => ({ id: brand.id, name: brand.name, productCount: brand.productCount }));
   const activeCategory = categoriesQuery.data?.find((category) => category.id === categoryId);
 
   useEffect(() => {
     setMobileFiltersOpen(false);
-  }, [categoryId, sort]);
+  }, [categoryId, brandId, sort]);
 
   const updateParam = (key: string, value: string) => {
     const next = new URLSearchParams(searchParams);
     if (value) next.set(key, value); else next.delete(key);
+    if (key !== 'page') next.delete('page');
     setSearchParams(next);
+  };
+
+  const changeFilters = (nextFilters: FilterState) => {
+    setFilters(nextFilters);
+    const next = new URLSearchParams(searchParams);
+    next.delete('page');
+    setSearchParams(next, { replace: true });
+  };
+
+  const resetFilters = () => {
+    setFilters(defaultFilterState);
+    setSearchParams({});
   };
 
   return (
@@ -80,7 +100,7 @@ export function CatalogPage() {
         <button className="filter-mobile-button" type="button" onClick={() => setMobileFiltersOpen(true)}>
           <SlidersHorizontal size={18} /> Фильтры
         </button>
-        <span>Найдено: <strong>{productsQuery.data?.length ?? 0}</strong></span>
+        <span>Найдено: <strong>{productsQuery.data?.totalItems ?? 0}</strong></span>
         <label>
           <span>Сортировка</span>
           <select value={sort} onChange={(event) => updateParam('sort', event.target.value)}>
@@ -98,9 +118,9 @@ export function CatalogPage() {
             <strong>Фильтры</strong>
             <button type="button" onClick={() => setMobileFiltersOpen(false)}><X /></button>
           </div>
-          <FiltersSidebar value={filters} materials={materials} onChange={setFilters} onReset={() => setFilters(defaultFilterState)} />
+          <FiltersSidebar value={filters} materials={materials} brands={brands} brand={brandId} onBrandChange={(value) => updateParam('brand', value)} onChange={changeFilters} onReset={resetFilters} />
         </div>
-        <FiltersSidebar value={filters} materials={materials} onChange={setFilters} onReset={() => setFilters(defaultFilterState)} />
+        <FiltersSidebar value={filters} materials={materials} brands={brands} brand={brandId} onBrandChange={(value) => updateParam('brand', value)} onChange={changeFilters} onReset={resetFilters} />
         <div>
           {productsQuery.isLoading ? (
             <LoadingGrid count={9} />
@@ -111,14 +131,14 @@ export function CatalogPage() {
               description={productsQuery.error instanceof Error ? productsQuery.error.message : 'Проверьте доступность backend и повторите запрос.'}
               action={<button className="button button--primary" type="button" onClick={() => void productsQuery.refetch()}>Повторить</button>}
             />
-          ) : productsQuery.data?.length ? (
-            <ProductGrid products={productsQuery.data} />
+          ) : productsQuery.data?.products.length ? (
+            <><ProductGrid products={productsQuery.data.products} /><Pagination page={page} totalPages={productsQuery.data.totalPages} onChange={(nextPage) => { updateParam('page', String(nextPage)); window.scrollTo({ top: 0, behavior: 'smooth' }); }} /></>
           ) : (
             <EmptyState
               icon={<SlidersHorizontal />}
               title="По выбранным параметрам ничего не найдено"
               description="Попробуйте изменить фильтры или посмотреть все товары."
-              action={<button className="button button--primary" type="button" onClick={() => { setFilters(defaultFilterState); setSearchParams({}); }}>Сбросить параметры</button>}
+              action={<button className="button button--primary" type="button" onClick={resetFilters}>Сбросить параметры</button>}
             />
           )}
         </div>

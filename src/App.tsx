@@ -6,6 +6,7 @@ import { AccountPage } from '@/pages/AccountPage';
 import { ArticlePage } from '@/pages/ArticlePage';
 import { BlogPage } from '@/pages/BlogPage';
 import { BrandsPage } from '@/pages/BrandsPage';
+import { BrandPage } from '@/pages/BrandPage';
 import { CartPage } from '@/pages/CartPage';
 import { CatalogPage } from '@/pages/CatalogPage';
 import { CheckoutPage } from '@/pages/CheckoutPage';
@@ -37,6 +38,7 @@ const router = createBrowserRouter([
       { path: '/blog', element: <BlogPage /> },
       { path: '/blog/:slug', element: <ArticlePage /> },
       { path: '/brands', element: <BrandsPage /> },
+      { path: '/brands/:slug', element: <BrandPage /> },
       { path: '/delivery', element: <DeliveryPage /> },
       { path: '/about', element: <AboutPage /> },
       { path: '/contacts', element: <ContactsPage /> },

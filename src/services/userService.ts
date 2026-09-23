@@ -17,6 +17,19 @@ export interface UpdateUserProfile {
   phone: string;
 }
 
+export interface UserStats {
+  ordersCount: number;
+  wishlistCount: number;
+  reviewsCount: number;
+  totalSpent: number;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
 export const userService = {
   getProfile(): Promise<UserProfile> {
     return apiRequest<UserProfile>('/user/profile');
@@ -26,6 +39,17 @@ export const userService = {
     return apiRequest<{ message: string }>('/user/profile', {
       method: 'PUT',
       body: JSON.stringify(profile),
+    });
+  },
+
+  getStats(): Promise<UserStats> {
+    return apiRequest<UserStats>('/user/stats');
+  },
+
+  changePassword(request: ChangePasswordRequest): Promise<{ message: string }> {
+    return apiRequest<{ message: string }>('/user/change-password', {
+      method: 'POST',
+      body: JSON.stringify(request),
     });
   },
 };

@@ -1,26 +1,93 @@
-import { apiRequest } from '@/api/client';
-import type { CreateOrderRequest, CreatedOrder } from '@/types/catalog';
+import { apiRequest, resolveApiAssetUrl } from '@/api/client';
 
-const useMocks = import.meta.env.VITE_USE_MOCKS !== 'false';
+export interface OrderItem {
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  imageUrl?: string;
+}
+
+export interface Order {
+  id: number;
+  orderNumber: string;
+  orderDate: string;
+  status: string;
+  total: number;
+  shippingAddress: string;
+  paymentMethod: string;
+  shippingMethod: string;
+  items: OrderItem[];
+}
+
+export interface CreateOrderRequest {
+  paymentMethod: string;
+  shippingMethod: string;
+  shippingAddress: string;
+  comment?: string;
+}
+
+export interface CreatedOrder {
+  orderId: number;
+  orderNumber: string;
+  total: number;
+  message: string;
+}
+
+export interface OrderOption {
+  value: string;
+  displayName: string;
+  description?: string;
+}
+
+interface ApiOrderItem extends Omit<OrderItem, 'imageUrl'> {
+  imageUrl?: string | null;
+}
+
+interface ApiOrder extends Omit<Order, 'items'> {
+  items?: ApiOrderItem[];
+}
+
+function normalizeOrder(order: ApiOrder): Order {
+  return {
+    ...order,
+    items: (order.items ?? []).map((item) => ({
+      ...item,
+      imageUrl: resolveApiAssetUrl(item.imageUrl),
+    })),
+  };
+}
 
 export const orderService = {
-  async createOrder(request: CreateOrderRequest): Promise<CreatedOrder> {
-    if (!useMocks) {
-      return apiRequest<CreatedOrder>('/orders', {
-        method: 'POST',
-        body: JSON.stringify(request),
-      });
-    }
+  async getOrders(): Promise<Order[]> {
+    const orders = await apiRequest<ApiOrder[]>('/Order');
+    return orders.map(normalizeOrder);
+  },
 
-    await new Promise((resolve) => window.setTimeout(resolve, 650));
-    const total = request.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  async getOrder(id: number): Promise<Order> {
+    return normalizeOrder(await apiRequest<ApiOrder>(`/Order/${id}`));
+  },
 
-    return {
-      id: crypto.randomUUID(),
-      number: `KL-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
-      status: 'created',
-      total,
-      createdAt: new Date().toISOString(),
-    };
+  createOrder(request: CreateOrderRequest): Promise<CreatedOrder> {
+    return apiRequest('/Order', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  cancelOrder(id: number): Promise<{ message: string }> {
+    return apiRequest(`/Order/${id}/cancel`, { method: 'PUT' });
+  },
+
+  getStatuses(): Promise<OrderOption[]> {
+    return apiRequest('/Order/statuses');
+  },
+
+  getPaymentMethods(): Promise<OrderOption[]> {
+    return apiRequest('/Order/payment-methods');
+  },
+
+  getShippingMethods(): Promise<OrderOption[]> {
+    return apiRequest('/Order/shipping-methods');
   },
 };

@@ -1,4 +1,5 @@
 const AUTH_TOKEN_KEY = 'kelo-access-token';
+export const AUTH_UNAUTHORIZED_EVENT = 'kelo:unauthorized';
 
 export const authTokenStorage = {
   get(): string | null {

@@ -1,5 +1,3 @@
-import { apiRequest } from '@/api/client';
-
 export interface FeedbackRequest {
   name: string;
   phone: string;
@@ -8,18 +6,16 @@ export interface FeedbackRequest {
   kind: 'callback' | 'custom-order' | 'question';
 }
 
-const useMocks = import.meta.env.VITE_USE_MOCKS !== 'false';
-
 export const feedbackService = {
   async send(request: FeedbackRequest): Promise<void> {
-    if (!useMocks) {
-      await apiRequest<void>('/feedback', {
-        method: 'POST',
-        body: JSON.stringify(request),
-      });
-      return;
-    }
-
-    await new Promise((resolve) => window.setTimeout(resolve, 500));
+    const subject = request.kind === 'callback' ? 'Заказать звонок' : 'Вопрос с сайта КЕЛО';
+    const body = [
+      `Имя: ${request.name}`,
+      `Телефон: ${request.phone}`,
+      `E-mail: ${request.email || 'не указан'}`,
+      '',
+      request.message,
+    ].join('\n');
+    window.location.href = `mailto:kelo_creates@mail.ru?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   },
 };

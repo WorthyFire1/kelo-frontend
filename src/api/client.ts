@@ -1,6 +1,6 @@
-import { authTokenStorage } from '@/lib/authTokenStorage';
+import { AUTH_UNAUTHORIZED_EVENT, authTokenStorage } from '@/lib/authTokenStorage';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://26.103.41.226/api';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://195.209.213.188/api').replace(/\/$/, '');
 
 export function resolveApiAssetUrl(path?: string | null): string | undefined {
   const value = path?.trim();
@@ -39,6 +39,11 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
   const responseText = await response.text();
 
   if (!response.ok) {
+    if (response.status === 401 && token) {
+      authTokenStorage.remove();
+      window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
+    }
+
     let message = responseText;
     try {
       const parsed = JSON.parse(responseText) as {

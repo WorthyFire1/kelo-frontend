@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { Heart, Menu, Search, ShieldCheck, ShoppingBag, UserRound, X } from 'lucide-react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { useCartStore } from '@/store/useCartStore';
-import { useFavoritesStore } from '@/store/useFavoritesStore';
+import { useCartQuery } from '@/hooks/useCart';
+import { useWishlistQuery } from '@/hooks/useWishlist';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Container } from '@/components/ui/Container';
 
@@ -21,9 +21,11 @@ export function Header() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
   const navigate = useNavigate();
-  const cartCount = useCartStore((state) => state.items.reduce((sum, item) => sum + item.quantity, 0));
-  const favoritesCount = useFavoritesStore((state) => state.productIds.length);
   const user = useAuthStore((state) => state.user);
+  const cartQuery = useCartQuery();
+  const wishlistQuery = useWishlistQuery();
+  const cartCount = user ? cartQuery.data?.totalItems ?? 0 : 0;
+  const favoritesCount = user ? wishlistQuery.data?.length ?? 0 : 0;
 
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();
