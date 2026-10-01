@@ -48,7 +48,7 @@ export const cartService = {
   add(productId: number, quantity = 1, variantName?: string): Promise<{ message: string }> {
     return apiRequest('/Cart/add', {
       method: 'POST',
-      body: JSON.stringify({ productId, quantity, variantName: variantName || null }),
+      body: JSON.stringify({ productId, quantity, variantName: variantName?.trim() || 'Стандартный' }),
     });
   },
 
