@@ -510,6 +510,36 @@ textarea { resize: vertical; }
 .radio-card input { accent-color: var(--green-800); margin-top: 3px; padding: 0; }
 .radio-card span { display: flex; flex-direction: column; }
 .radio-card small { color: var(--muted); margin-top: 4px; }
+.cdek-pickup-selector { min-width: 0; }
+.cdek-pickup-selector > label { display: block; margin-bottom: 8px; color: #46534b; font-size: .8rem; font-weight: 650; }
+.cdek-pickup-search { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 10px; }
+.cdek-pickup-search:focus-within { border-color: var(--green-600); box-shadow: 0 0 0 3px var(--green-100); }
+.cdek-pickup-search input { flex: 1; min-width: 0; width: 100%; border: 0; padding: 7px 3px; box-shadow: none; }
+.cdek-pickup-search input:focus { border: 0; box-shadow: none; }
+.cdek-pickup-search > svg { flex: none; color: var(--green-700); }
+.cdek-pickup-city { display: inline-flex; flex: none; align-items: center; gap: 5px; max-width: 45%; border: 0; border-radius: 7px; padding: 7px 9px; background: var(--green-100); color: var(--green-800); font-size: .8rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cdek-city-options { display: grid; max-height: 240px; overflow-y: auto; margin-top: 7px; padding: 5px; border: 1px solid var(--border); border-radius: 10px; background: white; box-shadow: var(--shadow); }
+.cdek-city-options button { display: flex; align-items: center; gap: 9px; width: 100%; border: 0; border-radius: 7px; padding: 10px; background: white; text-align: left; }
+.cdek-city-options button:hover, .cdek-city-options button:focus-visible { background: var(--green-50); }
+.cdek-city-options svg { flex: none; color: var(--green-700); }
+.cdek-pickup-hint, .cdek-pickup-count { display: flex; align-items: center; gap: 7px; margin: 9px 0; font-size: .78rem; }
+.cdek-pickup-hint button { border: 0; padding: 0; background: transparent; color: var(--green-800); font-weight: 700; text-decoration: underline; }
+.cdek-pickup-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 12px; margin-top: 14px; }
+.cdek-pickup-list-panel { min-width: 0; }
+.cdek-pickup-count { margin: 0 0 8px; color: var(--green-800); font-weight: 750; }
+.cdek-pickup-list { display: grid; align-content: start; gap: 6px; max-height: 320px; overflow-y: auto; padding-right: 4px; }
+.cdek-pickup-option { display: flex; flex-direction: column; gap: 5px; width: 100%; border: 1px solid var(--border); border-radius: 9px; padding: 10px; background: white; text-align: left; }
+.cdek-pickup-option:hover, .cdek-pickup-option:focus-visible, .cdek-pickup-option.is-selected { border-color: var(--green-700); background: var(--green-50); }
+.cdek-pickup-option strong { font-size: .8rem; line-height: 1.3; }
+.cdek-pickup-option span { color: var(--muted); font-size: .7rem; line-height: 1.4; }
+.cdek-pickup-map { width: 100%; min-height: 340px; z-index: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.cdek-pickup-map--loading { display: grid; place-items: center; padding: 22px; background: var(--green-50); color: var(--muted); text-align: center; font-size: .8rem; }
+.cdek-pickup-selected { display: flex; gap: 10px; margin-top: 14px; border: 1px solid var(--green-200); border-radius: 10px; padding: 13px; background: var(--green-50); color: var(--green-800); }
+.cdek-pickup-selected > svg { flex: none; }
+.cdek-pickup-selected div { display: grid; gap: 3px; min-width: 0; }
+.cdek-pickup-selected strong { font-size: .84rem; }
+.cdek-pickup-selected span { font-size: .8rem; overflow-wrap: anywhere; }
+.cdek-pickup-selected small { color: var(--muted); font-size: .73rem; }
 .checkout-summary h2 { display: flex; align-items: center; gap: 8px; }
 .checkout-products { display: grid; gap: 12px; padding: 14px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .checkout-products div { display: flex; justify-content: space-between; gap: 14px; font-size: .78rem; }
@@ -758,6 +788,8 @@ textarea { resize: vertical; }
 .not-found > div { display: flex; gap: 12px; margin-top: 18px; }
 
 @media (max-width: 1100px) {
+  .cdek-pickup-layout { grid-template-columns: 1fr; }
+  .cdek-pickup-map { grid-row: 1; }
   .header-main { grid-template-columns: 170px 1fr auto; gap: 18px; }
   .desktop-nav__inner { gap: 19px; }
   .desktop-nav a { font-size: .82rem; }

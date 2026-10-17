@@ -3,12 +3,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, LoaderCircle, ShoppingBag } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { ApiError } from '@/api/client';
+import { CdekPickupSelector } from '@/components/checkout/CdekPickupSelector';
 import { Breadcrumbs } from '@/components/ui/Breadcrumbs';
 import { Button } from '@/components/ui/Button';
 import { Container } from '@/components/ui/Container';
 import { useCartQuery, cartQueryKey } from '@/hooks/useCart';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { formatPrice } from '@/lib/formatters';
+import type { CdekCity, CdekDeliveryPoint } from '@/services/cdekService';
 import { orderService, type CreatedOrder } from '@/services/orderService';
 import { userService } from '@/services/userService';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -37,6 +39,9 @@ export function CheckoutPage() {
   const [loading, setLoading] = useState(false);
   const [order, setOrder] = useState<CreatedOrder | null>(null);
   const [error, setError] = useState('');
+  const [shippingMethod, setShippingMethod] = useState('SDEK');
+  const [cdekCity, setCdekCity] = useState<CdekCity | null>(null);
+  const [cdekPoint, setCdekPoint] = useState<CdekDeliveryPoint | null>(null);
 
   if (!user) return <Navigate to="/account?returnTo=%2Fcheckout" replace />;
 
@@ -47,9 +52,16 @@ export function CheckoutPage() {
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setLoading(true);
     setError('');
     const formData = new FormData(event.currentTarget);
+    const selectedShippingMethod = String(formData.get('shippingMethod') ?? '');
+    if (selectedShippingMethod === 'SDEK' && (!cdekCity || !cdekPoint)) {
+      setError('Выберите город и пункт выдачи СДЭК на карте или в списке.');
+      return;
+    }
+
+    setLoading(true);
+
     const profile = {
       firstName: String(formData.get('firstName') ?? '').trim(),
       lastName: String(formData.get('lastName') ?? '').trim(),
@@ -64,8 +76,11 @@ export function CheckoutPage() {
       const address = String(formData.get('address') ?? '').trim();
       const created = await orderService.createOrder({
         paymentMethod: String(formData.get('paymentMethod') ?? ''),
-        shippingMethod: String(formData.get('shippingMethod') ?? ''),
-        shippingAddress: [city, address].filter(Boolean).join(', '),
+        shippingMethod: selectedShippingMethod,
+        // Текущий API заказа принимает адрес строкой, поэтому сохраняем в ней код выбранного ПВЗ.
+        shippingAddress: selectedShippingMethod === 'SDEK' && cdekCity && cdekPoint
+          ? `${cdekCity.city}, ПВЗ СДЭК ${cdekPoint.code}, ${cdekPoint.address || cdekPoint.name}`
+          : [city, address].filter(Boolean).join(', '),
         comment: String(formData.get('comment') ?? '').trim(),
       });
       setOrder(created);
@@ -124,13 +139,19 @@ export function CheckoutPage() {
           <fieldset>
             <legend>2. Доставка</legend>
             <div className="radio-card-grid">
-              {shippingMethodsQuery.data?.map((method, index) => (
-                <label className="radio-card" key={method.value}><input type="radio" name="shippingMethod" value={method.value} defaultChecked={index === 0} /><span><strong>{method.displayName}</strong><small>{method.description}</small></span></label>
+              {shippingMethodsQuery.data?.map((method) => (
+                <label className="radio-card" key={method.value}><input type="radio" name="shippingMethod" value={method.value} checked={shippingMethod === method.value} onChange={() => { setShippingMethod(method.value); setError(''); }} /><span><strong>{method.displayName}</strong><small>{method.description}</small></span></label>
               ))}
             </div>
             <div className="form-grid">
-              <label><span>Город *</span><input name="city" required /></label>
-              <label><span>Адрес или пункт выдачи *</span><input name="address" required /></label>
+              {shippingMethod === 'SDEK' ? (
+                <CdekPickupSelector city={cdekCity} point={cdekPoint} onChange={(selectedCity, selectedPoint) => { setCdekCity(selectedCity); setCdekPoint(selectedPoint); setError(''); }} />
+              ) : (
+                <>
+                  <label><span>Город *</span><input name="city" required /></label>
+                  <label><span>Адрес получения *</span><input name="address" required /></label>
+                </>
+              )}
               <label className="form-grid__wide"><span>Комментарий</span><textarea name="comment" rows={3} /></label>
             </div>
           </fieldset>

@@ -1,6 +1,6 @@
 import { AUTH_UNAUTHORIZED_EVENT, authTokenStorage } from '@/lib/authTokenStorage';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://195.209.213.188/api').replace(/\/$/, '');
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'https://kelovector.ru/api').replace(/\/$/, '');
 
 export function resolveApiAssetUrl(path?: string | null): string | undefined {
   const value = path?.trim();
