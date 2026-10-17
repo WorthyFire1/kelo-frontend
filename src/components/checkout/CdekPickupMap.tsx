@@ -34,6 +34,7 @@ export function CdekPickupMap({ city, points, selectedCode, onSelect }: CdekPick
 
     const markerRegistry = markerByCode.current;
     const instance = L.map(element.current, { scrollWheelZoom: false }).setView([55.75, 37.62], 11);
+    instance.attributionControl.setPrefix(false);
     L.tileLayer(import.meta.env.VITE_MAP_TILE_URL || defaultTileUrl, {
       maxZoom: 19,
       attribution: import.meta.env.VITE_MAP_ATTRIBUTION || defaultAttribution,
