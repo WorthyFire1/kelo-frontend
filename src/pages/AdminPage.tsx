@@ -152,6 +152,7 @@ export function AdminPage() {
   const [productPage, setProductPage] = useState(1);
   const [usersPage, setUsersPage] = useState(1);
   const [productFormOpen, setProductFormOpen] = useState(false);
+  const [productAdvancedOpen, setProductAdvancedOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<AdminProductDetails | null>(null);
 
   const dashboardQuery = useQuery({ queryKey: ['admin', 'stats'], queryFn: adminService.getStats, enabled: section === 'overview' });
@@ -174,6 +175,7 @@ export function AdminPage() {
     mutationFn: adminService.getProduct,
     onSuccess: (product) => {
       setEditingProduct(product);
+      setProductAdvancedOpen(product.oldPrice != null || product.costPrice != null || product.lowStockThreshold != null || product.isNew);
       setProductFormOpen(true);
     },
   });
@@ -219,6 +221,7 @@ export function AdminPage() {
 
   const openCreateProduct = () => {
     setEditingProduct(null);
+    setProductAdvancedOpen(false);
     createProductMutation.reset();
     updateProductMutation.reset();
     setProductFormOpen(true);
@@ -391,26 +394,36 @@ export function AdminPage() {
           <div className="admin-modal__panel">
             <div className="admin-modal__header"><div><span className="admin-kicker">Каталог</span><h2 id="product-form-title">{editingProduct ? 'Редактирование товара' : 'Новый товар'}</h2></div><button type="button" onClick={closeProductForm} aria-label="Закрыть"><X /></button></div>
             <form key={`${editingProduct?.id ?? 'new'}-${productOptionsQuery.data ? 'ready' : 'loading'}`} onSubmit={saveProduct}>
+              <p className="admin-form-note">Поля со звёздочкой обязательны.</p>
               <div className="admin-form-grid">
-                <label className="admin-form-wide"><span>Название</span><input name="name" required maxLength={200} defaultValue={editingProduct?.name ?? ''} /></label>
-                <label><span>Цена, ₽</span><input name="price" type="number" required min="0" step="0.01" defaultValue={editingProduct?.price ?? ''} /></label>
-                <label><span>Старая цена, ₽</span><input name="oldPrice" type="number" min="0" step="0.01" defaultValue={editingProduct?.oldPrice ?? ''} /></label>
-                <label><span>Себестоимость, ₽</span><input name="costPrice" type="number" min="0" step="0.01" defaultValue={editingProduct?.costPrice ?? ''} /></label>
-                <label><span>Остаток, шт.</span><input name="stockQuantity" type="number" required min="0" step="1" defaultValue={editingProduct?.stockQuantity ?? ''} /></label>
-                <label><span>Порог малого остатка</span><input name="lowStockThreshold" type="number" min="0" step="1" defaultValue={editingProduct?.lowStockThreshold ?? ''} /></label>
-                <label><span>Артикул</span><input name="sku" required maxLength={100} defaultValue={editingProduct?.sku ?? ''} /></label>
-                <label><span>Категория</span><select name="categoryId" required defaultValue={editingProduct?.categoryId ?? ''}><option value="">Выберите категорию</option>{productOptionsQuery.data?.categories.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
-                <label><span>Бренд</span><select name="brandId" required defaultValue={editingProduct?.brandId ?? ''}><option value="">Выберите бренд</option>{productOptionsQuery.data?.brands.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
-                <label><span>Материал</span><select name="materialId" required defaultValue={editingProduct?.materialId ?? ''}><option value="">Выберите материал</option>{productOptionsQuery.data?.materials.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
+                <label className="admin-form-wide"><span>Название <b className="admin-form-required" aria-hidden="true">*</b></span><input name="name" required maxLength={200} defaultValue={editingProduct?.name ?? ''} /></label>
+                <label><span>Цена, ₽ <b className="admin-form-required" aria-hidden="true">*</b></span><input name="price" type="number" required min="0" step="0.01" defaultValue={editingProduct?.price ?? ''} /></label>
+                <label><span>Остаток, шт. <b className="admin-form-required" aria-hidden="true">*</b></span><input name="stockQuantity" type="number" required min="0" step="1" defaultValue={editingProduct?.stockQuantity ?? ''} /></label>
+                <label><span>Артикул <b className="admin-form-required" aria-hidden="true">*</b></span><input name="sku" required maxLength={100} defaultValue={editingProduct?.sku ?? ''} /></label>
+                <label><span>Категория <b className="admin-form-required" aria-hidden="true">*</b></span><select name="categoryId" required defaultValue={editingProduct?.categoryId ?? ''}><option value="">Выберите категорию</option>{productOptionsQuery.data?.categories.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
+                <label><span>Бренд <b className="admin-form-required" aria-hidden="true">*</b></span><select name="brandId" required defaultValue={editingProduct?.brandId ?? ''}><option value="">Выберите бренд</option>{productOptionsQuery.data?.brands.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
+                <label><span>Материал <b className="admin-form-required" aria-hidden="true">*</b></span><select name="materialId" required defaultValue={editingProduct?.materialId ?? ''}><option value="">Выберите материал</option>{productOptionsQuery.data?.materials.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
                 <label className="admin-form-wide"><span>{editingProduct?.mainImageUrl ? 'Новое изображение (заменит текущее)' : 'Изображение товара'}</span><input name="imageFile" type="file" accept=".jpg,.jpeg,.png,.gif,.webp,image/jpeg,image/png,image/gif,image/webp" /><small>JPG, PNG, GIF или WebP, не более 5 МБ.</small></label>
-                <label className="admin-form-wide"><span>Краткое описание</span><textarea name="shortDescription" required maxLength={1000} rows={3} defaultValue={editingProduct?.shortDescription ?? ''} /></label>
-                <label className="admin-form-wide"><span>Полное описание</span><textarea name="fullDescription" required rows={5} defaultValue={editingProduct?.fullDescription ?? ''} /></label>
+                <label className="admin-form-wide"><span>Краткое описание <b className="admin-form-required" aria-hidden="true">*</b></span><textarea name="shortDescription" required maxLength={1000} rows={3} defaultValue={editingProduct?.shortDescription ?? ''} /></label>
+                <label className="admin-form-wide"><span>Полное описание <b className="admin-form-required" aria-hidden="true">*</b></span><textarea name="fullDescription" required rows={5} defaultValue={editingProduct?.fullDescription ?? ''} /></label>
               </div>
               <div className="admin-check-grid">
                 <label><input name="isActive" type="checkbox" defaultChecked={editingProduct?.isActive ?? true} /> Активен</label>
-                <label><input name="isNew" type="checkbox" defaultChecked={editingProduct?.isNew ?? false} /> Новинка</label>
                 {editingProduct?.mainImageUrl && <label><input name="removeImage" type="checkbox" /> Удалить текущее изображение</label>}
               </div>
+              <details className="admin-product-extra" open={productAdvancedOpen} onToggle={(event) => setProductAdvancedOpen(event.currentTarget.open)}>
+                <summary>Дополнительно: цены, учёт и метки</summary>
+                <div className="admin-product-extra__fields">
+                  <div className="admin-form-grid">
+                    <label><span>Старая цена, ₽</span><input name="oldPrice" type="number" min="0" step="0.01" defaultValue={editingProduct?.oldPrice ?? ''} /><small>Укажите только для товара со скидкой.</small></label>
+                    <label><span>Себестоимость, ₽</span><input name="costPrice" type="number" min="0" step="0.01" defaultValue={editingProduct?.costPrice ?? ''} /></label>
+                    <label><span>Порог малого остатка</span><input name="lowStockThreshold" type="number" min="0" step="1" defaultValue={editingProduct?.lowStockThreshold ?? ''} /></label>
+                  </div>
+                  <div className="admin-check-grid">
+                    <label><input name="isNew" type="checkbox" defaultChecked={editingProduct?.isNew ?? false} /> Новинка</label>
+                  </div>
+                </div>
+              </details>
               {productOptionsQuery.isError && <div className="admin-mutation-error">{getErrorMessage(productOptionsQuery.error, 'Не удалось загрузить категории, бренды и материалы.')}</div>}
               {createProductMutation.isError && <div className="admin-mutation-error">{getErrorMessage(createProductMutation.error, 'Товар не создан.')}</div>}
               {updateProductMutation.isError && <div className="admin-mutation-error">{getErrorMessage(updateProductMutation.error, 'Изменения не сохранены.')}</div>}
