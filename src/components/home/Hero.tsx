@@ -28,7 +28,16 @@ const slides = [
     description: 'Мы бережно вытачиваем форму из природного материала, чтобы вы могли вдохнуть в неё характер и создать неповторимый подарок.',
     catalogPath: '/catalog?category=souvenirs-decor',
     images: [
-      { src: '/images/hero/knight-placeholder.webp', alt: 'Деревянная фигурка средневекового рыцаря' },
+      { src: '/images/hero/knight-painting.webp', alt: 'Деревянная фигурка рыцаря на палитре с красками' },
+    ],
+  },
+  {
+    eyebrow: 'Для творчества',
+    title: 'Сувениры, творчество и декор',
+    description: 'Мы бережно вытачиваем форму из природного материала, чтобы вы могли вдохнуть в неё характер и создать неповторимый подарок.',
+    catalogPath: '/catalog?category=souvenirs-decor',
+    images: [
+      { src: '/images/hero/knights-painting.webp', alt: 'Две деревянные фигурки рыцарей на палитре с красками' },
     ],
   },
   {
