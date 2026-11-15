@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, LoaderCircle, ShoppingBag } from 'lucide-react';
+import { CheckCircle2, CreditCard, LoaderCircle, ShoppingBag } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { ApiError } from '@/api/client';
 import { CdekPickupSelector } from '@/components/checkout/CdekPickupSelector';
@@ -12,6 +12,7 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { formatPrice } from '@/lib/formatters';
 import type { CdekCity, CdekDeliveryPoint } from '@/services/cdekService';
 import { orderService, type CreatedOrder } from '@/services/orderService';
+import { isOnlinePaymentMethod, paymentService } from '@/services/paymentService';
 import { userService } from '@/services/userService';
 import { useAuthStore } from '@/store/useAuthStore';
 
@@ -38,7 +39,14 @@ export function CheckoutPage() {
   });
   const [loading, setLoading] = useState(false);
   const [order, setOrder] = useState<CreatedOrder | null>(null);
+  const [onlinePaymentRequired, setOnlinePaymentRequired] = useState(false);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('');
   const [error, setError] = useState('');
+  const [orderStateUnknown, setOrderStateUnknown] = useState(false);
+  const checkoutInFlight = useRef(false);
+  const paymentInFlight = useRef(false);
   const [shippingMethod, setShippingMethod] = useState('SDEK');
   const [cdekCity, setCdekCity] = useState<CdekCity | null>(null);
   const [cdekPoint, setCdekPoint] = useState<CdekDeliveryPoint | null>(null);
@@ -46,12 +54,32 @@ export function CheckoutPage() {
   if (!user) return <Navigate to="/account?returnTo=%2Fcheckout" replace />;
 
   const cart = cartQuery.data;
-  if (!cartQuery.isPending && !cartQuery.isError && !cart?.items.length && !order) {
+  if (!cartQuery.isPending && !cartQuery.isError && !cart?.items.length && !order && !orderStateUnknown) {
     return <Navigate to="/cart" replace />;
   }
 
+  const selectedPaymentMethod = paymentMethod || paymentMethodsQuery.data?.[0]?.value || '';
+
+  const startPayment = async (created: CreatedOrder) => {
+    if (paymentInFlight.current) return;
+    paymentInFlight.current = true;
+    setPaymentLoading(true);
+    setPaymentError('');
+    try {
+      const paymentUrl = await paymentService.createPayment(created);
+      window.location.assign(paymentUrl);
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : 'Не удалось открыть оплату.';
+      setPaymentError(`${message} Заказ уже создан. Не оформляйте его повторно; обратитесь в магазин, чтобы продолжить оплату.`);
+    } finally {
+      paymentInFlight.current = false;
+      setPaymentLoading(false);
+    }
+  };
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (checkoutInFlight.current || order || orderStateUnknown) return;
     setError('');
     const formData = new FormData(event.currentTarget);
     const selectedShippingMethod = String(formData.get('shippingMethod') ?? '');
@@ -59,7 +87,12 @@ export function CheckoutPage() {
       setError('Выберите город и пункт выдачи СДЭК на карте или в списке.');
       return;
     }
+    if (!selectedPaymentMethod) {
+      setError('Выберите способ оплаты.');
+      return;
+    }
 
+    checkoutInFlight.current = true;
     setLoading(true);
 
     const profile = {
@@ -69,30 +102,44 @@ export function CheckoutPage() {
       email: String(formData.get('email') ?? '').trim(),
     };
 
+    let orderRequestStarted = false;
     try {
       await userService.updateProfile(profile);
       updateUser(profile);
       const city = String(formData.get('city') ?? '').trim();
       const address = String(formData.get('address') ?? '').trim();
+      orderRequestStarted = true;
       const created = await orderService.createOrder({
-        paymentMethod: String(formData.get('paymentMethod') ?? ''),
+        paymentMethod: selectedPaymentMethod,
         shippingMethod: selectedShippingMethod,
-        // Текущий API заказа принимает адрес строкой, поэтому сохраняем в ней код выбранного ПВЗ.
+        // Адрес сохраняем для отображения; коды города и ПВЗ передаём отдельными полями API.
         shippingAddress: selectedShippingMethod === 'SDEK' && cdekCity && cdekPoint
           ? `${cdekCity.city}, ПВЗ СДЭК ${cdekPoint.code}, ${cdekPoint.address || cdekPoint.name}`
           : [city, address].filter(Boolean).join(', '),
+        ...(selectedShippingMethod === 'SDEK' && cdekCity && cdekPoint
+          ? { cdekCityCode: cdekCity.code, cdekDeliveryPointCode: cdekPoint.code }
+          : {}),
         comment: String(formData.get('comment') ?? '').trim(),
       });
       setOrder(created);
-      await Promise.all([
+      const needsOnlinePayment = isOnlinePaymentMethod(selectedPaymentMethod) && created.total > 0;
+      setOnlinePaymentRequired(needsOnlinePayment);
+      await Promise.allSettled([
         queryClient.invalidateQueries({ queryKey: cartQueryKey(user.id) }),
         queryClient.invalidateQueries({ queryKey: ['orders', user.id] }),
         queryClient.invalidateQueries({ queryKey: ['user', 'stats', user.id] }),
         queryClient.invalidateQueries({ queryKey: ['user', 'profile', user.id] }),
       ]);
+      if (needsOnlinePayment) void startPayment(created);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : 'Не удалось создать заказ. Проверьте данные и попробуйте ещё раз.');
+      if (orderRequestStarted && requestError instanceof ApiError && requestError.status >= 500) {
+        setOrderStateUnknown(true);
+        setError('Сервер не подтвердил создание заказа. Проверьте «Мои заказы» в личном кабинете перед повторным оформлением.');
+      } else {
+        setError(requestError instanceof ApiError ? requestError.message : 'Не удалось создать заказ. Проверьте данные и попробуйте ещё раз.');
+      }
     } finally {
+      checkoutInFlight.current = false;
       setLoading(false);
     }
   };
@@ -100,12 +147,17 @@ export function CheckoutPage() {
   if (order) {
     return (
       <Container className="page-shell checkout-success">
-        <CheckCircle2 />
+        {onlinePaymentRequired ? <CreditCard /> : <CheckCircle2 />}
         <span className="eyebrow">Заказ создан</span>
-        <h1>Спасибо за заказ!</h1>
+        <h1>{onlinePaymentRequired ? 'Осталось оплатить заказ' : 'Спасибо за заказ!'}</h1>
         <p>Номер заказа: <strong>{order.orderNumber}</strong></p>
-        <p>{order.message} Сумма заказа — <strong>{formatPrice(order.total)}</strong>.</p>
-        <div><Link className="button button--primary" to="/catalog">Продолжить покупки</Link><Link className="button button--secondary" to="/account">Посмотреть заказ</Link></div>
+        <p>{onlinePaymentRequired ? 'Сумма к оплате' : order.message} — <strong>{formatPrice(order.total)}</strong>.</p>
+        {onlinePaymentRequired && <p>{paymentLoading ? 'Открываем страницу банка…' : 'Заказ создан. Если переход в банк не произошёл, проверьте заказ в личном кабинете.'}</p>}
+        {paymentError && <p className="form-error" role="alert">{paymentError}</p>}
+        <div>
+          <Link className="button button--secondary" to={`/account?orderId=${order.orderId}`}>Посмотреть заказ</Link>
+          {!onlinePaymentRequired && <Link className="button button--primary" to="/catalog">Продолжить покупки</Link>}
+        </div>
       </Container>
     );
   }
@@ -158,8 +210,8 @@ export function CheckoutPage() {
           <fieldset>
             <legend>3. Оплата</legend>
             <div className="radio-card-grid">
-              {paymentMethodsQuery.data?.map((method, index) => (
-                <label className="radio-card" key={method.value}><input type="radio" name="paymentMethod" value={method.value} defaultChecked={index === 0} /><span><strong>{method.displayName}</strong></span></label>
+              {paymentMethodsQuery.data?.map((method) => (
+                <label className="radio-card" key={method.value}><input type="radio" name="paymentMethod" value={method.value} checked={selectedPaymentMethod === method.value} onChange={() => { setPaymentMethod(method.value); setError(''); }} /><span><strong>{method.displayName}</strong></span></label>
               ))}
             </div>
           </fieldset>
@@ -173,7 +225,8 @@ export function CheckoutPage() {
           <div className="order-summary__total"><span>Итого</span><strong>{formatPrice(cart?.total ?? 0)}</strong></div>
           <label className="consent-row"><input type="checkbox" required /><span>Согласен с офертой и обработкой персональных данных</span></label>
           {error && <p className="form-error" role="alert">{error}</p>}
-          <Button type="submit" fullWidth disabled={loading}>{loading && <LoaderCircle className="spin" size={18} />} {loading ? 'Оформляем…' : 'Оформить заказ'}</Button>
+          {orderStateUnknown && <Link className="text-link" to="/account">Проверить мои заказы</Link>}
+          <Button type="submit" fullWidth disabled={loading || orderStateUnknown}>{loading && <LoaderCircle className="spin" size={18} />} {loading ? 'Оформляем…' : isOnlinePaymentMethod(selectedPaymentMethod) ? 'Оформить и оплатить' : 'Оформить заказ'}</Button>
         </aside>
       </form>
     </Container>

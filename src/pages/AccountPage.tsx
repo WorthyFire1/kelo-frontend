@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Container } from '@/components/ui/Container';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { formatPrice } from '@/lib/formatters';
+import { orderStatusLabel } from '@/lib/orderStatus';
 import { authService } from '@/services/authService';
 import { customOrderService } from '@/services/customOrderService';
 import { orderService } from '@/services/orderService';
@@ -19,14 +20,6 @@ const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
   month: 'long',
   year: 'numeric',
 });
-
-const orderStatusLabels: Record<string, string> = {
-  New: 'Новый',
-  Processing: 'В обработке',
-  Shipped: 'Отправлен',
-  Delivered: 'Доставлен',
-  Cancelled: 'Отменён',
-};
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -50,7 +43,11 @@ export function AccountPage() {
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState('');
   const [passwordError, setPasswordError] = useState('');
-  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(() => {
+    const value = searchParams.get('orderId');
+    const id = value && /^\d+$/.test(value) ? Number(value) : null;
+    return id && Number.isSafeInteger(id) && id > 0 ? id : null;
+  });
   const [selectedCustomOrderId, setSelectedCustomOrderId] = useState<number | null>(null);
 
   const profileQuery = useQuery({
@@ -132,7 +129,8 @@ export function AccountPage() {
 
       setSession(response);
       const requestedPath = searchParams.get('returnTo');
-      const returnTo = requestedPath?.startsWith('/') && !requestedPath.startsWith('//') ? requestedPath : '/account';
+      const accountPath = selectedOrderId ? `/account?orderId=${selectedOrderId}` : '/account';
+      const returnTo = requestedPath?.startsWith('/') && !requestedPath.startsWith('//') ? requestedPath : accountPath;
       navigate(returnTo, { replace: true });
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 401) {
@@ -211,7 +209,7 @@ export function AccountPage() {
   const profile = profileQuery.data;
   const stats = statsQuery.data;
   const isProfileLoading = profileQuery.isPending || profileQuery.isFetching;
-  const getOrderStatusLabel = (status: string) => statusesQuery.data?.find((item) => item.value === status)?.displayName ?? orderStatusLabels[status] ?? status;
+  const getOrderStatusLabel = (status: string) => statusesQuery.data?.find((item) => item.value === status)?.displayName ?? orderStatusLabel(status);
 
   return (
     <Container className="page-shell">
@@ -310,6 +308,7 @@ export function AccountPage() {
               <label><span>E-mail</span><input name="email" type="email" required placeholder="mail@example.ru" /></label>
               <label><span>Пароль</span><input name="password" type="password" required minLength={6} /></label>
               {tab === 'register' && <label><span>Повторите пароль</span><input name="passwordConfirmation" type="password" required minLength={6} /></label>}
+              {tab === 'login' && <Link className="text-link auth-forgot-link" to="/forgot-password">Забыли пароль?</Link>}
               {error && <div className="form-error" role="alert">{error}</div>}
               <Button fullWidth type="submit" disabled={isSubmitting}>{isSubmitting ? 'Подождите...' : tab === 'login' ? 'Войти' : 'Создать аккаунт'}</Button>
             </form>
@@ -318,7 +317,7 @@ export function AccountPage() {
         </div>
       )}
 
-      {selectedOrderId !== null && (
+      {user && selectedOrderId !== null && (
         <div className="account-modal" role="dialog" aria-modal="true" aria-label="Детали заказа">
           <button className="account-modal__overlay" type="button" onClick={() => setSelectedOrderId(null)} aria-label="Закрыть" />
           <div className="account-modal__panel"><button className="account-modal__close" type="button" onClick={() => setSelectedOrderId(null)}><X /></button><span className="eyebrow">Заказ</span>

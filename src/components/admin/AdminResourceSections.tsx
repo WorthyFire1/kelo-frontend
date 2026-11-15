@@ -2,6 +2,7 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BookOpen, Eye, Image, Pencil, Plus, RefreshCw, Tags, Trash2, X } from 'lucide-react';
 import { Pagination } from '@/components/ui/Pagination';
+import { editableOrderStatuses, orderStatusLabel, orderStatuses } from '@/lib/orderStatus';
 import {
   adminService,
   type AdminBlogPost,
@@ -19,14 +20,6 @@ const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
   month: 'short',
   year: 'numeric',
 });
-const orderStatuses = [
-  { value: 'New', label: 'Новый' },
-  { value: 'Processing', label: 'В обработке' },
-  { value: 'Shipped', label: 'Отправлен' },
-  { value: 'Delivered', label: 'Доставлен' },
-  { value: 'Cancelled', label: 'Отменён' },
-];
-
 function formatDate(value?: string | null) {
   if (!value) return '—';
   const date = new Date(value);
@@ -111,7 +104,7 @@ export function AdminOrdersSection() {
                   <tr key={order.id}>
                     <td><strong>{order.orderNumber}</strong></td><td>{order.customerName}</td><td>{formatDate(order.orderDate)}</td>
                     <td><strong>{moneyFormatter.format(order.total)}</strong></td><td>{order.itemsCount}</td>
-                    <td><select className="admin-order-status" value={order.status} disabled={updateMutation.isPending && updateMutation.variables?.id === order.id} onChange={(event) => updateMutation.mutate({ id: order.id, nextStatus: event.target.value })}>{orderStatuses.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></td>
+                    <td><select className="admin-order-status" value={order.status} disabled={updateMutation.isPending && updateMutation.variables?.id === order.id} onChange={(event) => updateMutation.mutate({ id: order.id, nextStatus: event.target.value })}>{!editableOrderStatuses.some((item) => item.value === order.status) && <option value={order.status} disabled>{orderStatusLabel(order.status)}</option>}{editableOrderStatuses.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></td>
                     <td><button className="admin-row-action" type="button" onClick={() => setSelectedId(order.id)} aria-label="Открыть заказ"><Eye size={16} /></button></td>
                   </tr>
                 ))}
@@ -132,6 +125,7 @@ export function AdminOrdersSection() {
               <dl className="admin-detail-grid">
                 <div><dt>Номер</dt><dd>{orderQuery.data.orderNumber}</dd></div>
                 <div><dt>Дата</dt><dd>{formatDate(orderQuery.data.orderDate)}</dd></div>
+                <div><dt>Статус</dt><dd>{orderStatusLabel(orderQuery.data.status)}</dd></div>
                 <div><dt>Оплата</dt><dd>{orderQuery.data.paymentMethod} · {orderQuery.data.paymentStatus}</dd></div>
                 <div><dt>Доставка</dt><dd>{orderQuery.data.shippingMethod}</dd></div>
                 <div className="admin-form-wide"><dt>Адрес</dt><dd>{orderQuery.data.shippingAddress || '—'}</dd></div>

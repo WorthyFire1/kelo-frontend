@@ -13,6 +13,13 @@ interface RegisterCredentials {
   lastName: string;
 }
 
+interface ResetPasswordRequest {
+  email: string;
+  token: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
 export interface AuthResponse {
   success: boolean;
   message: string;
@@ -35,6 +42,20 @@ export const authService = {
     return apiRequest<AuthResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ ...credentials, rememberMe: credentials.rememberMe ?? false }),
+    });
+  },
+
+  forgotPassword(email: string): Promise<{ message: string }> {
+    return apiRequest('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  resetPassword(request: ResetPasswordRequest): Promise<{ message: string }> {
+    return apiRequest('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify(request),
     });
   },
 };

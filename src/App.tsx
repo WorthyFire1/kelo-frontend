@@ -14,11 +14,14 @@ import { ContactsPage } from '@/pages/ContactsPage';
 import { CustomOrderPage } from '@/pages/CustomOrderPage';
 import { DeliveryPage } from '@/pages/DeliveryPage';
 import { FavoritesPage } from '@/pages/FavoritesPage';
+import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage';
 import { HomePage } from '@/pages/HomePage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
+import { PaymentReturnPage } from '@/pages/PaymentReturnPage';
 import { PoliciesPage } from '@/pages/PoliciesPage';
 import { ProductPage } from '@/pages/ProductPage';
 import { PromotionsPage } from '@/pages/PromotionsPage';
+import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
 import { SearchPage } from '@/pages/SearchPage';
 import { AdminPage } from '@/pages/AdminPage';
 
@@ -47,6 +50,10 @@ const router = createBrowserRouter([
       { path: '/favorites', element: <FavoritesPage /> },
       { path: '/checkout', element: <CheckoutPage /> },
       { path: '/account', element: <AccountPage /> },
+      { path: '/forgot-password', element: <ForgotPasswordPage /> },
+      { path: '/reset-password', element: <ResetPasswordPage /> },
+      { path: '/payment/success', element: <PaymentReturnPage result="success" /> },
+      { path: '/payment/fail', element: <PaymentReturnPage result="fail" /> },
       { path: '/policies/:type', element: <PoliciesPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],

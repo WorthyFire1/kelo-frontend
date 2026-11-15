@@ -25,6 +25,8 @@ export interface CreateOrderRequest {
   shippingMethod: string;
   shippingAddress: string;
   comment?: string;
+  cdekCityCode?: number;
+  cdekDeliveryPointCode?: string;
 }
 
 export interface CreatedOrder {
