@@ -124,6 +124,7 @@ export function AccountPage() {
           password,
           firstName: String(data.get('firstName') ?? '').trim(),
           lastName: String(data.get('lastName') ?? '').trim(),
+          phoneNumber: String(data.get('phoneNumber') ?? '').trim(),
         })
         : await authService.login({ email, password });
 
@@ -274,7 +275,7 @@ export function AccountPage() {
                 <label><span>Имя</span><input name="firstName" required defaultValue={profile?.firstName ?? user.firstName} /></label>
                 <label><span>Фамилия</span><input name="lastName" required defaultValue={profile?.lastName ?? user.lastName} /></label>
                 <label><span>E-mail</span><input name="profileEmail" type="email" required defaultValue={profile?.email ?? user.email} /></label>
-                <label><span>Телефон</span><input name="phone" type="tel" defaultValue={profile?.phone || user.phone || ''} placeholder="+7 900 000-00-00" /></label>
+                <label><span>Телефон *</span><input name="phone" type="tel" autoComplete="tel" required defaultValue={profile?.phone || user.phone || ''} placeholder="+7 900 000-00-00" /></label>
               </div>
               {profileMessage && <div className="profile-feedback is-success" role="status">{profileMessage}</div>}
               {profileError && <div className="profile-feedback is-error" role="alert">{profileError}</div>}
@@ -306,6 +307,7 @@ export function AccountPage() {
             <form onSubmit={submit}>
               {tab === 'register' && <div className="auth-name-fields"><label><span>Имя</span><input name="firstName" autoComplete="given-name" required /></label><label><span>Фамилия</span><input name="lastName" autoComplete="family-name" required /></label></div>}
               <label><span>E-mail</span><input name="email" type="email" required placeholder="mail@example.ru" /></label>
+              {tab === 'register' && <label><span>Телефон *</span><input name="phoneNumber" type="tel" autoComplete="tel" required placeholder="+7 900 000-00-00" /></label>}
               <label><span>Пароль</span><input name="password" type="password" required minLength={6} /></label>
               {tab === 'register' && <label><span>Повторите пароль</span><input name="passwordConfirmation" type="password" required minLength={6} /></label>}
               {tab === 'login' && <Link className="text-link auth-forgot-link" to="/forgot-password">Забыли пароль?</Link>}

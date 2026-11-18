@@ -11,6 +11,7 @@ interface RegisterCredentials {
   password: string;
   firstName: string;
   lastName: string;
+  phoneNumber: string;
 }
 
 interface ResetPasswordRequest {
